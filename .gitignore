@@ -1,0 +1,11 @@
+# Secrets: copy from the matching .env.example instead
+.env
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local Claude Code preview config (contains machine-specific absolute paths)
+.claude/

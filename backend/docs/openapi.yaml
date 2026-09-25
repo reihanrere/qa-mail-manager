@@ -1,0 +1,627 @@
+openapi: 3.0.3
+info:
+  title: QA Mail Manager API
+  description: >
+    Internal backend that proxies Mail.tm accounts and inboxes for QA/testing purposes.
+    The frontend never receives a Mail.tm password or JWT.
+  version: '1.0.0'
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Health
+  - name: Accounts
+  - name: Inbox
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/accounts/generate:
+    post:
+      tags: [Accounts]
+      summary: Generate a new Mail.tm account and save it
+      description: >
+        Fetches an available Mail.tm domain, generates a random username/password,
+        registers the account on Mail.tm, and persists it to PostgreSQL.
+        The optional tag and note are validated before anything is created on Mail.tm.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateAccountRequest'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MailAccount'
+        '400':
+          description: Invalid body, or tag/note too long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Mail.tm request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/accounts:
+    get:
+      tags: [Accounts]
+      summary: List stored accounts (paginated)
+      parameters:
+        - name: search
+          in: query
+          description: Case-insensitive match on email, domain, tag or note
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [AVAILABLE, USED, BLOCKED]
+        - name: sort
+          in: query
+          description: >
+            `newest` (default) orders by creation date. `latest_message` puts accounts with the most
+            recent inbox activity first (refreshed by the background inbox sync).
+          schema:
+            type: string
+            enum: [newest, latest_message]
+        - $ref: '#/components/parameters/Page'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: One page of accounts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MailAccount'
+                      meta:
+                        $ref: '#/components/schemas/PageMeta'
+        '500':
+          description: Internal error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/accounts/stats:
+    get:
+      tags: [Accounts]
+      summary: Account counts per status and per domain
+      responses:
+        '200':
+          description: Aggregated counts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AccountStats'
+
+  /api/accounts/{id}/status:
+    patch:
+      tags: [Accounts]
+      summary: Update an account's status
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStatusRequest'
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid id, body, or status value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/accounts/{id}:
+    get:
+      tags: [Accounts]
+      summary: Get a single account
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MailAccount'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [Accounts]
+      summary: Edit an account's tag and/or note
+      description: Omitted fields are left unchanged; an empty string clears the value.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateAccountRequest'
+      responses:
+        '200':
+          description: The updated account
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MailAccount'
+        '400':
+          description: Invalid body, nothing to update, or tag/note too long
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Accounts]
+      summary: Delete an account (database only, Mail.tm side untouched)
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid account id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/accounts/{id}/messages:
+    get:
+      tags: [Inbox]
+      summary: List messages in the account's inbox, newest first
+      description: >
+        Logs into Mail.tm on demand; the JWT is never persisted. Pages hold up to 30 messages
+        (Mail.tm's page size). Mail.tm has no search API, so `search` scans up to 10 pages (300 messages)
+        and returns every match in a single page; `meta.truncated` is true when the scan stopped early.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/Page'
+        - name: search
+          in: query
+          description: Case-insensitive match on subject, intro, sender name or address
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One page of messages
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MessageSummary'
+                      meta:
+                        allOf:
+                          - $ref: '#/components/schemas/PageMeta'
+                          - type: object
+                            properties:
+                              truncated:
+                                type: boolean
+        '400':
+          description: Invalid account id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account or message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Mail.tm request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/accounts/{id}/messages/{messageId}:
+    get:
+      tags: [Inbox]
+      summary: Get a single message's full detail
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Message detail
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/MessageDetail'
+        '400':
+          description: Invalid account id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account or message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Mail.tm request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Inbox]
+      summary: Permanently delete a message on Mail.tm
+      description: The account's message count and latest-message time are refreshed afterwards.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid account id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account or message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Mail.tm request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/accounts/{id}/messages/{messageId}/read:
+    patch:
+      tags: [Inbox]
+      summary: Mark a message as read on Mail.tm
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Message marked as read
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          seen:
+                            type: boolean
+                            example: true
+        '400':
+          description: Invalid account id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Account or message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Mail.tm request failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: 1-based page number
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    AccountId:
+      name: id
+      in: path
+      required: true
+      description: MailAccount UUID
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Success
+        data:
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+          nullable: true
+
+    GenerateAccountRequest:
+      type: object
+      properties:
+        tag:
+          type: string
+          maxLength: 50
+          example: login-flow
+        note:
+          type: string
+          maxLength: 500
+          example: Used for the OTP regression suite
+
+    UpdateStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [AVAILABLE, USED, BLOCKED]
+
+    MailAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+        email:
+          type: string
+          format: email
+        domain:
+          type: string
+        status:
+          type: string
+          enum: [AVAILABLE, USED, BLOCKED]
+        tag:
+          type: string
+        note:
+          type: string
+        lastMessageAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Newest inbox message time, refreshed by the background sync
+        messageCount:
+          type: integer
+          description: Total messages in the inbox at the last sync
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PageMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        hasMore:
+          type: boolean
+
+    AccountStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        byStatus:
+          type: object
+          additionalProperties:
+            type: integer
+          example: { AVAILABLE: 3, USED: 1, BLOCKED: 0 }
+        byDomain:
+          type: array
+          items:
+            type: object
+            properties:
+              domain:
+                type: string
+              count:
+                type: integer
+
+    MessageSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        subject:
+          type: string
+        intro:
+          type: string
+        seen:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        from:
+          type: object
+          properties:
+            address:
+              type: string
+            name:
+              type: string
+
+    MessageDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        subject:
+          type: string
+        seen:
+          type: boolean
+        from:
+          type: object
+          properties:
+            address:
+              type: string
+            name:
+              type: string
+        to:
+          type: array
+          items:
+            type: object
+            properties:
+              address:
+                type: string
+              name:
+                type: string
+        text:
+          type: string
+        html:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
