@@ -1,17 +1,20 @@
 # QA Mail Manager — Frontend
 
-Frontend for the QA Mail Manager internal tool: generate and manage [Mail.tm](https://mail.tm) test accounts and read their inboxes (with OTP detection) through the backend API in `../backend`. The frontend never talks to Mail.tm directly and never sees account passwords or tokens.
+Frontend for the QA Mail Manager internal tool: generate and manage test accounts (on [Mail.tm](https://mail.tm) or our own catch-all domain) and read their inboxes (with OTP detection) through the backend API in `../backend`. The frontend never talks to Mail.tm directly and never sees account passwords or tokens.
 
 ## Features
 
-- **Dashboard** — account totals per status and domain, recently generated accounts, quick actions.
-- **Accounts** — generate accounts with an optional tag and note, edit tag/note, change status, delete; server-side search and status filter with infinite scroll.
+- **Dashboard** — account totals per status, domain and provider, recently generated accounts, quick actions.
+- **Accounts** — generate one or many accounts (provider, domain, tag, note), edit tag/note, change status, replace old-format addresses, delete; server-side search, status/provider filter with infinite scroll; CSV export of the filtered list.
 - **Inbox** — three resizable panes (accounts · messages · message detail) modelled on the shadcn mail example:
   - accounts with the most recent mail first, searchable, infinite scroll, collapsible to initials;
   - messages newest first, server-side search, "Unread" filter, infinite scroll, auto-refresh every 30 s;
-  - messages are marked as read when opened and can be deleted; HTML mail renders in a sandboxed iframe;
-  - verification codes are detected only next to an OTP keyword (code, OTP, kode, verifikasi, …) and can be copied in one click.
-- **Settings** — theme, sidebar preference, backend connection status, reset local preferences.
+  - messages are marked as read when opened and can be deleted; HTML mail renders in a sandboxed iframe with inline (`cid:`) images, attachments and the raw source;
+  - **Expand** opens the message in a wide modal for emails designed wider than the pane;
+  - verification codes are detected only next to an OTP keyword (code, OTP, kode, verifikasi, …) and can be copied in one click; verification / login / reset links get Open and Copy buttons;
+  - own-domain accounts can reply when the backend has SMTP configured.
+- **Live updates** — new mail appears at once over server-sent events, with one grouped toast per burst (can be muted in Settings).
+- **Settings** — editable backend settings (saved overrides, reset to default), provider status, theme, sidebar preference, notifications, backend connection status.
 - Responsive: below 1024 px the inbox becomes a single-pane flow; below 768 px the sidebar moves into a sheet.
 
 ## Tech Stack
@@ -81,11 +84,13 @@ bun run format
 bun run format:check
 ```
 
-Run the unit tests (OTP detection, formatting helpers, inbox cache updates):
+Run the unit tests (OTP and link detection, formatting helpers, settings fields, live events,
+inbox cache updates):
 
 ```bash
 bun run test        # once
 bun run test:watch  # watch mode
+bun run test:e2e    # Playwright against the running Docker stack, see e2e/README.md
 ```
 
 > This project uses Bun exclusively. Do not use npm, pnpm, or yarn.
@@ -103,12 +108,15 @@ src/
 │   │   ├── api.ts       # /accounts endpoints
 │   │   ├── queries.ts   # query keys + infinite/stats/detail hooks
 │   │   ├── status.ts    # status labels and colours shared across pages
-│   │   └── components/  # accounts table, generate/edit dialogs
-│   └── inbox/
-│       ├── api.ts       # /accounts/:id/messages endpoints
-│       ├── queries.ts   # message query hooks and cache helpers
-│       ├── utils/       # OTP detection, sender/initials formatting
-│       └── components/  # inbox container, account list, message list/detail, OTP card
+│   │   ├── provider.ts  # default provider choice for the generate dialog
+│   │   └── components/  # accounts table, generate/edit dialogs, provider badge
+│   ├── inbox/
+│   │   ├── api.ts       # /accounts/:id/messages endpoints
+│   │   ├── queries.ts   # message query hooks and cache helpers
+│   │   ├── utils/       # OTP and link detection, cid images, reply defaults, formatting
+│   │   └── components/  # inbox container, account list, message list/detail, OTP and link cards, compose
+│   ├── live/            # server-sent events: cache invalidation and new-mail toasts
+│   └── settings/        # /settings endpoints and the editable settings form
 ├── hooks/               # useMediaQuery, useDebouncedValue, useRefresh
 ├── lib/                 # axios instance, query client, api-error helper, cn()
 ├── providers/           # AppProviders, QueryProvider, ThemeProvider
@@ -121,7 +129,8 @@ src/
 └── main.tsx             # React entry point
 ```
 
-Tests live next to the code they cover as `*.test.ts`.
+Unit tests live next to the code they cover as `*.test.ts`. The Playwright end-to-end test is in
+[`e2e/`](e2e/README.md).
 
 ## Routing (TanStack Router)
 

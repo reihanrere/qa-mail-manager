@@ -171,7 +171,7 @@ func listField(key string, ptr func(*Settings) *[]string) editableField {
 			}
 			cleaned := []string{}
 			for _, item := range list {
-				if item = strings.ToLower(strings.TrimSpace(item)); item != "" {
+				if item = normalizeKeyword(item); item != "" {
 					cleaned = append(cleaned, item)
 				}
 			}
@@ -184,8 +184,7 @@ func listField(key string, ptr func(*Settings) *[]string) editableField {
 // editableFields are the settings the Settings page may change. Secrets, ports, the
 // catch-all domain and the ingest switch stay environment-only.
 var editableFields = []editableField{
-	stringField("defaultProvider", func(s *Settings) *string { return &s.DefaultProvider },
-		func(v string) string { return strings.ToLower(strings.TrimSpace(v)) }),
+	stringField("defaultProvider", func(s *Settings) *string { return &s.DefaultProvider }, normalizeKeyword),
 	intField("tagMaxLength", func(s *Settings) *int { return &s.Limits.TagMaxLength }),
 	intField("noteMaxLength", func(s *Settings) *int { return &s.Limits.NoteMaxLength }),
 	intField("usernameMaxAttempts", func(s *Settings) *int { return &s.UsernameMaxAttempts }),

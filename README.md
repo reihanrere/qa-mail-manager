@@ -4,8 +4,10 @@ Internal tool for generating test email accounts and reading their inboxes (with
 Two providers: public [Mail.tm](https://mail.tm), and our own catch-all domain (e.g. `re-testing.me`),
 which is not on disposable-email blocklists.
 
-- [`backend/`](backend/README.md) — Go (Fiber + GORM + PostgreSQL) API that proxies Mail.tm
+- [`backend/`](backend/README.md) — Go (Fiber + GORM + PostgreSQL) API: proxies Mail.tm and stores own-domain mail
 - [`frontend/`](frontend/README.md) — React + Vite app
+- [`cloudflare/email-worker/`](cloudflare/email-worker/README.md) — Email Worker that forwards own-domain mail to the backend
+- [`tools/test-emails/`](tools/test-emails) — sample emails for manual QA
 
 ## Run with Docker (production)
 
@@ -20,7 +22,7 @@ Open **http://localhost:3000** (change with `WEB_PORT` in `.env`). The app has n
 listens on `127.0.0.1` only; other devices on your network cannot open it unless you set
 `WEB_BIND=0.0.0.0` (trusted networks only).
 
-The stack runs three containers:
+The stack runs these containers:
 
 | Service    | What it is                                                                  | Exposed on the host |
 | ---------- | --------------------------------------------------------------------------- | ------------------- |
@@ -79,6 +81,12 @@ sender ──▶ Cloudflare Email Routing ──▶ Email Worker ──▶ Cloud
 4. **Worker** – deploy [`cloudflare/email-worker`](cloudflare/email-worker/README.md) with the same secret,
    then set the Email Routing **catch-all** action to **Send to a Worker**.
 5. `docker compose up -d --build`. **Settings → Mail Providers** shows whether each provider is available.
+6. **Reputation (recommended)** – add a DMARC record so the domain looks maintained to signup
+   forms and mail filters: TXT `_dmarc.your-domain` = `v=DMARC1; p=none`. Email Routing already
+   added SPF. A simple landing page on the apex domain also helps against "unknown domain" checks.
+
+Several domains can share one setup: list them in `CATCHALL_DOMAIN` (comma-separated) and enable
+Email Routing with the same Worker on each. The generate dialog then offers a domain picker.
 
 All tunables are documented in [`.env.example`](.env.example); most behaviour settings can also be
 changed live on the **Settings** page.
@@ -87,12 +95,22 @@ changed live on the **Settings** page.
 
 - Realistic generated addresses (`rinda.saputra91`), with an "Old format" badge and one-click
   **Replace** for legacy `qa_test_*` accounts
+- **Bulk generate** (up to `BULK_GENERATE_MAX` at once) and **CSV export** of the filtered list
+  (passwords are never exported)
+- Several catch-all domains, with a domain picker when generating
 - Provider badge and filter on the accounts list; per-provider breakdown on the dashboard
-- **Live updates**: new mail appears instantly with a toast (server-sent events), polling as fallback
-- Message detail: OTP detection, sandboxed HTML with inline (`cid:`) images, attachments to open or
-  download, and **View source** for the raw email and headers
+- **Live updates**: new mail appears instantly with one grouped toast per burst (server-sent
+  events), polling as fallback; toasts can be muted per browser
+- Message detail: OTP detection, verification / login / reset links with Open and Copy,
+  sandboxed HTML with inline (`cid:`) images, attachments, **View source**, and an **Expand**
+  modal for wide emails
+- **Reply** from own-domain accounts when an SMTP server is configured (`SMTP_*`)
+- Account lifecycle rules: mark accounts as used automatically (first email or copied OTP), and
+  block or delete accounts that got no mail for a while
+- Duplicate guard: Cloudflare retries of the same message are stored once
 - Fast database search for own-domain inboxes
 - Offline queue in the Email Worker, so mail sent while the laptop is off arrives later
+- Most settings editable live on the **Settings** page, without a restart
 - Sample emails for QA in [`tools/test-emails`](tools/test-emails) (`send.sh` or `gmail-samples.html`)
 
 ## Local development
@@ -100,3 +118,7 @@ changed live on the **Settings** page.
 Run the backend and frontend separately with hot reload; see [`backend/README.md`](backend/README.md)
 and [`frontend/README.md`](frontend/README.md). Development uses its own PostgreSQL (from `backend/.env`),
 separate from the Docker volume.
+
+Tests: `go test ./...` in `backend/`, `bun run test` in `frontend/`, `npm test` in
+`cloudflare/email-worker/` (Node 22), and the Playwright end-to-end test described in
+[`frontend/e2e/README.md`](frontend/e2e/README.md).

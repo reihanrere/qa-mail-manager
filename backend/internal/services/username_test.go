@@ -14,10 +14,7 @@ var localPartPattern = regexp.MustCompile(`^[a-z]+[._]?[a-z]+[0-9]{0,4}$`)
 
 func TestGenerateLocalPartLooksHuman(t *testing.T) {
 	for i := 0; i < 500; i++ {
-		got, err := newUsernameGenerator(nil, nil).generate()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		got := newUsernameGenerator(nil, nil).generate()
 		if !localPartPattern.MatchString(got) {
 			t.Fatalf("%q does not look like name[sep]surname[digits]", got)
 		}
@@ -41,12 +38,12 @@ func TestNamePoolsAvoidBannedSubstrings(t *testing.T) {
 	}
 }
 
-func sequence(parts ...string) func() (string, error) {
+func sequence(parts ...string) func() string {
 	i := 0
-	return func() (string, error) {
+	return func() string {
 		p := parts[i%len(parts)]
 		i++
-		return p, nil
+		return p
 	}
 }
 
@@ -99,10 +96,7 @@ func TestRegisterUniqueAddressStopsOnOtherErrors(t *testing.T) {
 func TestUsernameGeneratorUsesConfiguredPools(t *testing.T) {
 	g := newUsernameGenerator([]string{"budi"}, []string{"santoso"})
 	for i := 0; i < 50; i++ {
-		got, err := g.generate()
-		if err != nil {
-			t.Fatal(err)
-		}
+		got := g.generate()
 		if !strings.HasPrefix(got, "budi") || !strings.Contains(got, "santoso") {
 			t.Fatalf("%q does not use the configured pools", got)
 		}

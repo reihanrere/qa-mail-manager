@@ -26,7 +26,7 @@ dashboard once, then deploy again.
 | `INGEST_URL`    | `wrangler.toml` `[vars]`    | `https://<tunnel hostname>/api/ingest`                          |
 | `INGEST_SECRET` | `wrangler secret put`       | Same value as `INGEST_SECRET` in the project's `.env`           |
 | `FORWARD_TO`    | `wrangler.toml` `[vars]`    | Optional verified address that also receives a copy             |
-| `PENDING`       | `wrangler.toml` KV binding  | Queue for offline delivery (`npx wrangler kv namespace create PENDING`) |
+| `PENDING`       | `wrangler.toml` KV binding  | Queue for offline delivery; create your own with `npx wrangler kv namespace create PENDING` and put its id in `wrangler.toml` |
 | `PENDING_TTL_SECONDS` / `RETRY_BATCH_SIZE` | `[vars]` | Queue lifetime and messages retried per cron run      |
 
 ## Deploy

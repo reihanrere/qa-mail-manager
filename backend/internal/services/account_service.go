@@ -64,15 +64,21 @@ func (s *AccountService) Events() *EventHub {
 
 // providerFor returns the provider that owns the account's mailbox.
 func (s *AccountService) providerFor(account *models.MailAccount) (providers.MailProvider, error) {
-	name := account.Provider
-	if name == "" {
-		name = providers.NameMailTM
-	}
+	name := accountProvider(account)
 	p, ok := s.providers[name]
 	if !ok {
 		return nil, fmt.Errorf("account %s uses unavailable mail provider %q", account.ID, name)
 	}
 	return p, nil
+}
+
+// accountProvider names the account's provider; rows created before providers existed
+// have none and are Mail.tm accounts.
+func accountProvider(account *models.MailAccount) string {
+	if account.Provider == "" {
+		return providers.NameMailTM
+	}
+	return account.Provider
 }
 
 // randomString generates a cryptographically secure random alphanumeric string.
@@ -113,6 +119,14 @@ func (in *GenerateAccountInput) Validate(limits Limits) error {
 		return err
 	}
 	return validateLabel("note", in.Note, limits.NoteMaxLength)
+}
+
+// providerOr returns the requested provider, or fallback when none was requested.
+func (in *GenerateAccountInput) providerOr(fallback string) string {
+	if in.Provider == "" {
+		return fallback
+	}
+	return in.Provider
 }
 
 func validateLabel(field, value string, maxLength int) error {
@@ -168,13 +182,10 @@ func (s *AccountService) GenerateAccount(ctx context.Context, input GenerateAcco
 	if err := input.Validate(settings.Limits); err != nil {
 		return nil, err
 	}
-	providerName := input.Provider
-	if providerName == "" {
-		providerName = settings.DefaultProvider
-	}
+	providerName := input.providerOr(settings.DefaultProvider)
 	provider, ok := s.providers[providerName]
 	if !ok {
-		return nil, fmt.Errorf("%w: unknown provider %q", ErrInvalidInput, input.Provider)
+		return nil, fmt.Errorf("%w: unknown provider %q", ErrInvalidInput, providerName)
 	}
 
 	domain := input.Domain
@@ -385,11 +396,7 @@ func (s *AccountService) ReplaceAccount(ctx context.Context, id uuid.UUID) (*Rep
 	if err != nil {
 		return nil, err
 	}
-	providerName := old.Provider
-	if providerName == "" {
-		providerName = providers.NameMailTM
-	}
-	account, err := s.GenerateAccount(ctx, GenerateAccountInput{Tag: old.Tag, Note: old.Note, Provider: providerName})
+	account, err := s.GenerateAccount(ctx, GenerateAccountInput{Tag: old.Tag, Note: old.Note, Provider: accountProvider(old)})
 	if err != nil {
 		return nil, err
 	}

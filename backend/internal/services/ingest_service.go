@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
@@ -48,20 +47,6 @@ func (s *AccountService) IngestMessage(ctx context.Context, raw []byte, envelope
 		return nil, err
 	}
 
-	// Cloudflare may retry a delivery; the Message-ID keeps that from storing duplicates
-	if email.MessageID != "" {
-		var existing models.Message
-		err := s.db.WithContext(ctx).Select("id").
-			Where("account_id = ? AND message_id = ?", account.ID, email.MessageID).
-			Limit(1).Find(&existing).Error
-		if err != nil {
-			return nil, fmt.Errorf("failed to check duplicate: %w", err)
-		}
-		if existing.ID != uuid.Nil {
-			return &IngestResult{AccountEmail: account.Email, MessageID: existing.ID.String(), Duplicate: true}, nil
-		}
-	}
-
 	message := &models.Message{
 		AccountID:   account.ID,
 		MessageID:   email.MessageID,
@@ -76,8 +61,9 @@ func (s *AccountService) IngestMessage(ctx context.Context, raw []byte, envelope
 		CreatedAt:   time.Now(),
 	}
 	if err := s.db.WithContext(ctx).Create(message).Error; err != nil {
-		// A concurrent retry of the same message won the race
-		if isUniqueViolation(err) && email.MessageID != "" {
+		// Cloudflare retries deliveries; the unique (account_id, message_id) index rejects
+		// the copy, and the stored original is reported instead
+		if isUniqueViolation(err) {
 			var existing models.Message
 			if s.db.WithContext(ctx).Select("id").
 				First(&existing, "account_id = ? AND message_id = ?", account.ID, email.MessageID).Error == nil {
@@ -162,9 +148,9 @@ func (s *AccountService) cleanupInactiveAccounts(ctx context.Context, settings S
 	}
 }
 
-// StartMessagePruner deletes stored messages older than MessageRetention on every
-// MessagePruneInterval until ctx ends. A zero retention keeps messages; the value is
-// re-read every cycle so Settings changes apply live.
+// StartMessagePruner runs account cleanup and deletes stored messages older than
+// MessageRetention on every MessagePruneInterval until ctx ends. A zero retention keeps
+// messages; settings are re-read every cycle so changes from the Settings page apply live.
 func (s *AccountService) StartMessagePruner(ctx context.Context) {
 	go func() {
 		for {

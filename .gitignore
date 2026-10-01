@@ -13,7 +13,3 @@
 # Playwright output
 frontend/test-results/
 frontend/playwright-report/
-
-# Playwright output
-frontend/test-results/
-frontend/playwright-report/

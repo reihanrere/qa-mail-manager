@@ -134,6 +134,10 @@ function SettingField({
   const id = `setting-${field.key}`
   const overridden = settings.overridden.includes(field.key)
   const defaultLabel = toDraft(settings.defaults[field.key]) || 'empty'
+  const options =
+    field.kind === 'provider'
+      ? settings.providers.map((provider) => ({ value: provider.name, label: provider.label }))
+      : field.options
 
   return (
     <div className="grid gap-2 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-start sm:gap-6">
@@ -153,28 +157,15 @@ function SettingField({
         </p>
       </div>
       <div className="min-w-0 space-y-1.5">
-        {field.kind === 'select' ? (
+        {options ? (
           <Select value={draft} onValueChange={onChange} disabled={disabled}>
             <SelectTrigger id={id} className={cn('w-full', dirty && 'border-primary')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {field.options?.map((option) => (
+              {options.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : field.kind === 'provider' ? (
-          <Select value={draft} onValueChange={onChange} disabled={disabled}>
-            <SelectTrigger id={id} className={cn('w-full', dirty && 'border-primary')}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {settings.providers.map((provider) => (
-                <SelectItem key={provider.name} value={provider.name}>
-                  {provider.label}
                 </SelectItem>
               ))}
             </SelectContent>

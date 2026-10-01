@@ -2,7 +2,8 @@
 
 Drive the real app in Google Chrome against the running Docker stack:
 generate an account in the UI, deliver an OTP email through the ingest endpoint (via the
-Cloudflare tunnel), check it appears live, and copy the code.
+Cloudflare tunnel), check it appears live, copy the code, and open the expanded message view.
+Playwright needs Node 22+.
 
 ```bash
 docker compose up -d          # from the project root

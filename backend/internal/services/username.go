@@ -1,10 +1,9 @@
 package services
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/big"
+	"math/rand/v2"
 	"strconv"
 
 	"qa-mail-manager/internal/providers"
@@ -45,72 +44,30 @@ func newUsernameGenerator(firstNames, lastNames []string) *usernameGenerator {
 	return &usernameGenerator{firstNames: firstNames, lastNames: lastNames}
 }
 
-// randomInt returns a cryptographically secure integer in [0, n).
-func randomInt(n int) (int, error) {
-	v, err := rand.Int(rand.Reader, big.NewInt(int64(n)))
-	if err != nil {
-		return 0, err
-	}
-	return int(v.Int64()), nil
-}
-
-func pick(pool []string) (string, error) {
-	i, err := randomInt(len(pool))
-	if err != nil {
-		return "", err
-	}
-	return pool[i], nil
-}
-
 // generate builds a local part such as "rinda.saputra91", "bagaspratama" or "dwi_anggraini1998".
-func (g *usernameGenerator) generate() (string, error) {
-	first, err := pick(g.firstNames)
-	if err != nil {
-		return "", err
-	}
-	last, err := pick(g.lastNames)
-	if err != nil {
-		return "", err
-	}
-	sep, err := pick(separators)
-	if err != nil {
-		return "", err
-	}
+// Names are not secrets, so math/rand is enough; uniqueness is checked by the caller.
+func (g *usernameGenerator) generate() string {
+	first := g.firstNames[rand.IntN(len(g.firstNames))]
+	last := g.lastNames[rand.IntN(len(g.lastNames))]
+	sep := separators[rand.IntN(len(separators))]
 
-	// Suffix: none, a short number, or a birth-year-like number.
-	kind, err := randomInt(3)
-	if err != nil {
-		return "", err
-	}
+	// Suffix: none, a short number, or a birth-year-like number
 	suffix := ""
-	switch kind {
+	switch rand.IntN(3) {
 	case 1:
-		n, err := randomInt(99)
-		if err != nil {
-			return "", err
-		}
-		suffix = strconv.Itoa(n + 1)
+		suffix = strconv.Itoa(1 + rand.IntN(99))
 	case 2:
-		n, err := randomInt(20)
-		if err != nil {
-			return "", err
-		}
-		suffix = strconv.Itoa(1985 + n)
+		suffix = strconv.Itoa(1985 + rand.IntN(20))
 	}
-
-	return first + sep + last + suffix, nil
+	return first + sep + last + suffix
 }
 
 // registerUniqueAddress generates local parts until register accepts one, trying at most
 // maxAttempts addresses. register returns providers.ErrAddressTaken (possibly wrapped)
 // to request another candidate; any other error aborts immediately.
-func registerUniqueAddress(domain string, maxAttempts int, newLocalPart func() (string, error), register func(email string) (string, error)) (email, accountID string, err error) {
+func registerUniqueAddress(domain string, maxAttempts int, newLocalPart func() string, register func(email string) (string, error)) (email, accountID string, err error) {
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		localPart, err := newLocalPart()
-		if err != nil {
-			return "", "", fmt.Errorf("failed to generate username: %w", err)
-		}
-		email = localPart + "@" + domain
+		email = newLocalPart() + "@" + domain
 
 		accountID, err = register(email)
 		if errors.Is(err, providers.ErrAddressTaken) {

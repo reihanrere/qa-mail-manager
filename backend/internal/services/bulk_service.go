@@ -34,9 +34,11 @@ func (s *AccountService) GenerateAccounts(ctx context.Context, input GenerateAcc
 		return nil, err
 	}
 
+	// Local addresses need no remote call, so only Mail.tm is throttled
+	throttle := input.providerOr(settings.DefaultProvider) != providers.NameLocal
 	result := &BulkGenerateResult{Accounts: []*models.MailAccount{}, Requested: count}
 	for i := 0; i < count; i++ {
-		if i > 0 && input.Provider != providers.NameLocal {
+		if i > 0 && throttle {
 			select {
 			case <-ctx.Done():
 				result.Error = ctx.Err().Error()
