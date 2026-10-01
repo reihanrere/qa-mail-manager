@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"qa-mail-manager/internal/database"
 	"qa-mail-manager/internal/models"
 	"qa-mail-manager/internal/providers"
 )
@@ -34,7 +36,7 @@ func testDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&models.MailAccount{}, &models.Message{}, &models.SettingOverride{}); err != nil {
+	if err := database.Migrate(db); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("TRUNCATE messages, mail_accounts, setting_overrides CASCADE").Error; err != nil {
@@ -110,6 +112,28 @@ func TestIntegrationLocalInboxLifecycle(t *testing.T) {
 	if again, _ := s.IngestMessage(ctx, raw, account.Email); !again.Duplicate {
 		t.Fatal("same Message-ID must be reported as duplicate")
 	}
+	// Concurrent retries must store exactly one copy (enforced by the unique index)
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			concurrent := bytes.Replace(raw, []byte("invoice-1@"), []byte("invoice-2@"), 1)
+			if _, err := s.IngestMessage(ctx, concurrent, account.Email); err != nil {
+				t.Errorf("concurrent ingest: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	var copies int64
+	db.Model(&models.Message{}).Where("message_id = ?", "invoice-2@example.com").Count(&copies)
+	if copies != 1 {
+		t.Fatalf("expected exactly one stored copy, got %d", copies)
+	}
+	for len(events) > 0 { // drain events from the extra ingests
+		<-events
+	}
+	db.Where("message_id = ?", "invoice-2@example.com").Delete(&models.Message{})
 	if _, err := s.IngestMessage(ctx, raw, "nobody@re-testing.me"); !errors.Is(err, ErrRecipientNotFound) {
 		t.Fatalf("expected ErrRecipientNotFound, got %v", err)
 	}

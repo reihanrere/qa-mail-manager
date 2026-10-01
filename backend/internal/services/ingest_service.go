@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"qa-mail-manager/internal/ingest"
 	"qa-mail-manager/internal/models"
@@ -74,6 +75,14 @@ func (s *AccountService) IngestMessage(ctx context.Context, raw []byte, envelope
 		CreatedAt:   time.Now(),
 	}
 	if err := s.db.WithContext(ctx).Create(message).Error; err != nil {
+		// A concurrent retry of the same message won the race
+		if isUniqueViolation(err) && email.MessageID != "" {
+			var existing models.Message
+			if s.db.WithContext(ctx).Select("id").
+				First(&existing, "account_id = ? AND message_id = ?", account.ID, email.MessageID).Error == nil {
+				return &IngestResult{AccountEmail: account.Email, MessageID: existing.ID.String(), Duplicate: true}, nil
+			}
+		}
 		return nil, fmt.Errorf("failed to store message: %w", err)
 	}
 
@@ -88,6 +97,12 @@ func (s *AccountService) IngestMessage(ctx context.Context, raw []byte, envelope
 		Subject:      email.Subject,
 	})
 	return &IngestResult{AccountEmail: account.Email, MessageID: message.ID.String()}, nil
+}
+
+// isUniqueViolation reports PostgreSQL error 23505 (unique_violation).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func attachmentMeta(list []ingest.Attachment) models.MessageAttachmentList {

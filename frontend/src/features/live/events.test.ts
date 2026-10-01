@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { QueryClient } from '@tanstack/react-query'
-import { invalidateForEvent, parseLiveEvent } from './events'
+import { invalidateForEvent, parseLiveEvent, summarizeNewMail } from './events'
 
 describe('parseLiveEvent', () => {
   it('accepts known event types', () => {
@@ -34,5 +34,34 @@ describe('invalidateForEvent', () => {
     const queryClient = client()
     invalidateForEvent(queryClient, { type: 'settings.changed' })
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['settings'] })
+  })
+})
+
+describe('summarizeNewMail', () => {
+  const mail = (accountId: string, subject = 'Hi') =>
+    ({ type: 'message.created', accountId, accountEmail: `${accountId}@re-testing.me`, subject }) as const
+
+  it('describes a single email', () => {
+    expect(summarizeNewMail([mail('a', 'OTP')])).toEqual({
+      title: 'New email for a@re-testing.me',
+      description: 'OTP',
+      accountId: 'a',
+    })
+  })
+
+  it('groups several emails for one account and keeps its inbox link', () => {
+    expect(summarizeNewMail([mail('a'), mail('a'), mail('a')])).toEqual({
+      title: '3 new emails',
+      description: 'For a@re-testing.me',
+      accountId: 'a',
+    })
+  })
+
+  it('groups emails for many accounts without a single inbox link', () => {
+    expect(summarizeNewMail([mail('a'), mail('b'), mail('c'), mail('d')])).toEqual({
+      title: '4 new emails',
+      description: 'For a@re-testing.me, b@re-testing.me and 2 more',
+      accountId: undefined,
+    })
   })
 })

@@ -33,6 +33,30 @@ export function invalidateForEvent(queryClient: QueryClient, event: LiveEvent) {
   }
 }
 
+/** Text of one grouped toast for several new emails that arrived together. */
+export function summarizeNewMail(events: LiveEvent[]): {
+  title: string
+  description: string
+  accountId?: string
+} {
+  const accounts = [...new Set(events.map((e) => e.accountEmail ?? 'an account'))]
+  if (events.length === 1) {
+    return {
+      title: `New email for ${accounts[0]}`,
+      description: events[0].subject || '(No subject)',
+      accountId: events[0].accountId,
+    }
+  }
+  const shown = accounts.slice(0, 2).join(', ')
+  const more = accounts.length > 2 ? ` and ${accounts.length - 2} more` : ''
+  return {
+    title: `${events.length} new emails`,
+    description: `For ${shown}${more}`,
+    // Open the inbox of the account only when all mail went to one account
+    accountId: accounts.length === 1 ? events[0].accountId : undefined,
+  }
+}
+
 /** Parses an SSE data field, or null for malformed payloads. */
 export function parseLiveEvent(data: string): LiveEvent | null {
   try {

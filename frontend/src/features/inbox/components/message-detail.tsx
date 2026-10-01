@@ -39,6 +39,8 @@ import { formatBytes, getInitials, getSenderAddress, getSenderName } from '@/fea
 import { resolveCidImages } from '@/features/inbox/utils/cid'
 import type { MessageAttachment } from '@/types/message'
 import { OTPCard } from './otp-card'
+import { VerificationLinkCard } from './verification-link-card'
+import { extractVerificationLinks } from '@/features/inbox/utils/links'
 
 interface MessageDetailProps {
   accountId?: string
@@ -270,6 +272,7 @@ type MessageData = Awaited<ReturnType<typeof inboxApi.getMessage>>
 
 function MessageContent({ accountId, message }: { accountId: string; message: MessageData }) {
   const otp = extractOTPFromMessage(message)
+  const links = extractVerificationLinks(message)
   const senderName = getSenderName(message.from)
   const senderAddress = getSenderAddress(message.from)
   const toLabels = (message.to ?? []).map((t) => t.address).join(', ')
@@ -314,6 +317,12 @@ function MessageContent({ accountId, message }: { accountId: string; message: Me
       {otp && (
         <div className="shrink-0 px-4 pt-4">
           <OTPCard otp={otp} />
+        </div>
+      )}
+
+      {links.length > 0 && (
+        <div className="shrink-0 px-4 pt-4">
+          <VerificationLinkCard links={links} />
         </div>
       )}
 

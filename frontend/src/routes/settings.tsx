@@ -139,6 +139,8 @@ function AppearanceSettings() {
   const setTheme = useThemeStore((state) => state.setTheme)
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed)
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed)
+  const newMailToasts = useAppStore((state) => state.newMailToasts)
+  const setNewMailToasts = useAppStore((state) => state.setNewMailToasts)
 
   return (
     <>
@@ -171,6 +173,14 @@ function AppearanceSettings() {
         description="Show only icons in the sidebar on larger screens"
       >
         <Switch id="collapse-sidebar" checked={sidebarCollapsed} onCheckedChange={setSidebarCollapsed} />
+      </SettingRow>
+      <Separator />
+      <SettingRow
+        label="New mail notifications"
+        htmlFor="new-mail-toasts"
+        description="Show a toast when mail arrives; several emails at once are grouped. Inboxes refresh either way"
+      >
+        <Switch id="new-mail-toasts" checked={newMailToasts} onCheckedChange={setNewMailToasts} />
       </SettingRow>
     </>
   )

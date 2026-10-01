@@ -31,8 +31,11 @@ dashboard once, then deploy again.
 
 ## Deploy
 
+Wrangler 4.14x needs Node.js 22 or newer (`.nvmrc`; with nvm run `nvm use` first).
+
 ```bash
 cd cloudflare/email-worker
+nvm use
 npm install
 npx wrangler login
 npm run secret      # paste the same INGEST_SECRET as in .env

@@ -71,7 +71,7 @@ services:
   # In the Cloudflare dashboard, point the tunnel's public hostname at http://backend:8081
   # (or your INGEST_PORT).
   cloudflared:
-    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-2026.9.3}
     restart: unless-stopped
     profiles: [tunnel]
     command: tunnel --no-autoupdate run
