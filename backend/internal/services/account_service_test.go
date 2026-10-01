@@ -102,6 +102,9 @@ func testSettings(defaultProvider string) Settings {
 		DefaultProvider:       defaultProvider,
 		Limits:                testLimits,
 		UsernameMaxAttempts:   5,
+		BulkGenerateMax:       5,
+		AutoMarkUsed:          AutoMarkOff,
+		AccountCleanupAction:  CleanupBlock,
 		InboxSearchMaxPages:   10,
 		MessagePruneInterval:  time.Hour,
 		LegacyUsernamePattern: "^qa_test_",
@@ -131,6 +134,9 @@ type stubProvider struct{ name string }
 func (p stubProvider) Label() string                            { return p.name }
 func (p stubProvider) Name() string                             { return p.name }
 func (stubProvider) PickDomain(context.Context) (string, error) { return "example.com", nil }
+func (stubProvider) Domains(context.Context) ([]string, error) {
+	return []string{"example.com", "example.org"}, nil
+}
 func (stubProvider) CreateAddress(context.Context, string, string) (string, error) {
 	return "id", nil
 }

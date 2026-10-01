@@ -15,6 +15,9 @@ func RegisterRoutes(app *fiber.App, accountHandler *handlers.AccountHandler, inb
 
 	accounts := api.Group("/accounts")
 	accounts.Post("/generate", accountHandler.Generate)
+	accounts.Post("/generate/bulk", accountHandler.GenerateBulk)
+	// Registered before "/:id" so "export" is not parsed as an account id
+	accounts.Get("/export", accountHandler.Export)
 	accounts.Get("/", accountHandler.List)
 	// Registered before "/:id" so "stats" is not parsed as an account id
 	accounts.Get("/stats", accountHandler.Stats)
@@ -25,6 +28,8 @@ func RegisterRoutes(app *fiber.App, accountHandler *handlers.AccountHandler, inb
 	accounts.Post("/:id/replace", accountHandler.Replace)
 
 	accounts.Get("/:id/messages", inboxHandler.ListMessages)
+	// Registered before "/:id/messages/:messageId" so "send" is not parsed as a message id
+	accounts.Post("/:id/messages/send", inboxHandler.SendMessage)
 	accounts.Get("/:id/messages/:messageId", inboxHandler.GetMessageDetail)
 	accounts.Delete("/:id/messages/:messageId", inboxHandler.DeleteMessage)
 	accounts.Patch("/:id/messages/:messageId/read", inboxHandler.MarkMessageRead)

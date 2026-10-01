@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"net/http"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -24,6 +26,7 @@ type generateRequest struct {
 	Tag      string `json:"tag"`
 	Note     string `json:"note"`
 	Provider string `json:"provider"`
+	Domain   string `json:"domain"`
 }
 
 // updateAccountRequest is the body for PATCH /api/accounts/:id; omitted fields are unchanged.
@@ -47,7 +50,7 @@ func (h *AccountHandler) Generate(c fiber.Ctx) error {
 		}
 	}
 
-	input := services.GenerateAccountInput{Tag: body.Tag, Note: body.Note, Provider: body.Provider}
+	input := services.GenerateAccountInput{Tag: body.Tag, Note: body.Note, Provider: body.Provider, Domain: body.Domain}
 	account, err := h.service.GenerateAccount(c.Context(), input)
 	if err != nil {
 		return respondError(c, err, http.StatusBadGateway)
@@ -91,9 +94,42 @@ func (h *AccountHandler) Replace(c fiber.Ctx) error {
 	return utils.Success(c, http.StatusCreated, "Success", result)
 }
 
-// List handles GET /api/accounts?search=&status=&sort=&page=&limit=.
-func (h *AccountHandler) List(c fiber.Ctx) error {
-	params := services.ListAccountsParams{
+// bulkGenerateRequest is the body for POST /api/accounts/generate/bulk.
+type bulkGenerateRequest struct {
+	generateRequest
+	Count int `json:"count"`
+}
+
+// GenerateBulk handles POST /api/accounts/generate/bulk.
+func (h *AccountHandler) GenerateBulk(c fiber.Ctx) error {
+	var body bulkGenerateRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+	}
+	input := services.GenerateAccountInput{Tag: body.Tag, Note: body.Note, Provider: body.Provider, Domain: body.Domain}
+	result, err := h.service.GenerateAccounts(c.Context(), input, body.Count)
+	if err != nil {
+		return respondError(c, err, http.StatusBadGateway)
+	}
+	return utils.Success(c, http.StatusCreated, "Success", result)
+}
+
+// Export handles GET /api/accounts/export: the filtered list as a CSV download.
+func (h *AccountHandler) Export(c fiber.Ctx) error {
+	params := listParams(c)
+	var buf bytes.Buffer
+	if err := h.service.ExportAccountsCSV(c.Context(), params, &buf); err != nil {
+		return respondError(c, err, http.StatusInternalServerError)
+	}
+	filename := "qa-mail-accounts-" + time.Now().Format("20060102-150405") + ".csv"
+	c.Set(fiber.HeaderContentType, "text/csv; charset=utf-8")
+	c.Set(fiber.HeaderContentDisposition, `attachment; filename="`+filename+`"`)
+	return c.Send(buf.Bytes())
+}
+
+// listParams reads the shared list/export filters from the query string.
+func listParams(c fiber.Ctx) services.ListAccountsParams {
+	return services.ListAccountsParams{
 		Search:   c.Query("search"),
 		Status:   c.Query("status"),
 		Provider: c.Query("provider"),
@@ -102,6 +138,11 @@ func (h *AccountHandler) List(c fiber.Ctx) error {
 		Page:     fiber.Query[int](c, "page", 1),
 		Limit:    fiber.Query[int](c, "limit", 0),
 	}
+}
+
+// List handles GET /api/accounts?search=&status=&sort=&page=&limit=.
+func (h *AccountHandler) List(c fiber.Ctx) error {
+	params := listParams(c)
 
 	accounts, meta, err := h.service.ListAccounts(c.Context(), params)
 	if err != nil {

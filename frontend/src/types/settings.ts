@@ -7,8 +7,10 @@ export type MailProviderName = 'mailtm' | 'local'
 export interface ProviderStatus {
   name: MailProviderName
   label: string
-  /** Domain new addresses are created on; missing when the provider is unavailable */
+  /** First domain, for simple displays; missing when the provider is unavailable */
   domain?: string
+  /** Every domain new addresses can be created on */
+  domains?: string[]
   available: boolean
   /** Why the provider cannot generate accounts right now */
   error?: string
@@ -23,6 +25,7 @@ export interface EditableSettings {
   tagMaxLength: number
   noteMaxLength: number
   usernameMaxAttempts: number
+  bulkGenerateMax: number
   usernameFirstNames: string[]
   usernameLastNames: string[]
   legacyUsernamePattern: string
@@ -30,7 +33,13 @@ export interface EditableSettings {
   inboxSyncInterval: string
   mailtmRequestDelay: string
   messageRetention: string
+  autoMarkUsed: AutoMarkUsed
+  accountCleanupAfter: string
+  accountCleanupAction: 'block' | 'delete'
 }
+
+/** When an AVAILABLE account becomes USED automatically. */
+export type AutoMarkUsed = 'off' | 'first_message' | 'otp_copied'
 
 export type EditableSettingKey = keyof EditableSettings
 
@@ -54,6 +63,8 @@ export interface AppSettings {
     searchMaxPages: number
     messageRetention: string
     ingestEnabled: boolean
+    /** SMTP is configured, so own-domain accounts can reply */
+    sendingEnabled: boolean
   }
   /** Current value of every editable setting */
   editable: EditableSettings

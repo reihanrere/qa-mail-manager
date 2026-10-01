@@ -168,6 +168,15 @@ func (s *AccountService) recordInboxActivity(ctx context.Context, account *model
 		return
 	}
 
+	if firstPage.TotalItems > 0 && account.MessageCount == 0 && account.Status == models.StatusAvailable &&
+		s.current().AutoMarkUsed == AutoMarkFirstMessage {
+		if err := s.UpdateStatus(ctx, account.ID, models.StatusUsed); err != nil {
+			log.Printf("auto mark used: %s: %v", account.Email, err)
+		} else {
+			account.Status = models.StatusUsed
+		}
+	}
+
 	if account.Provider != providers.NameLocal && firstPage.TotalItems > account.MessageCount {
 		s.events.Publish(Event{
 			Type:         EventMessageCreated,
@@ -278,7 +287,7 @@ func (s *AccountService) StartInboxSync(ctx context.Context) {
 
 func (s *AccountService) syncAllInboxes(ctx context.Context) {
 	var accounts []models.MailAccount
-	if err := s.db.WithContext(ctx).Select("id", "provider", "email", "password", "message_count").Find(&accounts).Error; err != nil {
+	if err := s.db.WithContext(ctx).Select("id", "provider", "email", "password", "message_count", "status").Find(&accounts).Error; err != nil {
 		log.Printf("inbox sync: failed to load accounts: %v", err)
 		return
 	}

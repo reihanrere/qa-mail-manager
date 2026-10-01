@@ -153,7 +153,20 @@ function SettingField({
         </p>
       </div>
       <div className="min-w-0 space-y-1.5">
-        {field.kind === 'provider' ? (
+        {field.kind === 'select' ? (
+          <Select value={draft} onValueChange={onChange} disabled={disabled}>
+            <SelectTrigger id={id} className={cn('w-full', dirty && 'border-primary')}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {field.options?.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : field.kind === 'provider' ? (
           <Select value={draft} onValueChange={onChange} disabled={disabled}>
             <SelectTrigger id={id} className={cn('w-full', dirty && 'border-primary')}>
               <SelectValue />

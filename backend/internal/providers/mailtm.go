@@ -29,6 +29,10 @@ func (p *MailTM) PickDomain(ctx context.Context) (string, error) {
 	return p.svc.PickAvailableDomain(ctx)
 }
 
+func (p *MailTM) Domains(ctx context.Context) ([]string, error) {
+	return p.svc.ActiveDomains(ctx)
+}
+
 func (p *MailTM) CreateAddress(ctx context.Context, email, password string) (string, error) {
 	id, err := p.svc.RegisterAccount(ctx, email, password)
 	if isAddressTaken(err) {

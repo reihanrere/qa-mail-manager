@@ -12,6 +12,7 @@ import (
 	"qa-mail-manager/internal/config"
 	"qa-mail-manager/internal/database"
 	"qa-mail-manager/internal/handlers"
+	"qa-mail-manager/internal/mailer"
 	"qa-mail-manager/internal/mailtm"
 	"qa-mail-manager/internal/providers"
 	"qa-mail-manager/internal/routes"
@@ -37,6 +38,7 @@ func main() {
 		Limits:          services.Limits{TagMaxLength: cfg.TagMaxLength, NoteMaxLength: cfg.NoteMaxLength},
 
 		UsernameMaxAttempts:   cfg.UsernameMaxAttempts,
+		BulkGenerateMax:       cfg.BulkGenerateMax,
 		FirstNames:            cfg.UsernameFirstNames,
 		LastNames:             cfg.UsernameLastNames,
 		LegacyUsernamePattern: cfg.LegacyUsernamePattern,
@@ -48,14 +50,25 @@ func main() {
 		MessageRetention:     cfg.MessageRetention,
 		MessagePruneInterval: cfg.MessagePruneInterval,
 
+		AutoMarkUsed:         cfg.AutoMarkUsed,
+		AccountCleanupAfter:  cfg.AccountCleanupAfter,
+		AccountCleanupAction: cfg.AccountCleanupAction,
+
 		IngestEnabled: cfg.IngestSecret != "",
 	},
 		providers.NewMailTM(mailtmService),
-		providers.NewLocal(db, cfg.CatchallDomain),
+		providers.NewLocal(db, cfg.CatchallDomains...),
 	)
 	if err != nil {
 		log.Fatalf("invalid service settings: %v", err)
 	}
+	accountService.SetMailer(mailer.New(mailer.Config{
+		Host:     cfg.SMTPHost,
+		Port:     cfg.SMTPPort,
+		Username: cfg.SMTPUsername,
+		Password: cfg.SMTPPassword,
+		Security: cfg.SMTPSecurity,
+	}))
 	if err := accountService.LoadSettingOverrides(context.Background()); err != nil {
 		log.Printf("settings: %v", err)
 	}

@@ -15,6 +15,8 @@ func validConfig() Config {
 		MessageRetention:        time.Hour,
 		MessagePruneInterval:    time.Minute,
 		UsernameMaxAttempts:     5,
+		BulkGenerateMax:         50,
+		SMTPSecurity:            "starttls",
 		TagMaxLength:            50,
 		NoteMaxLength:           500,
 		EventsHeartbeatInterval: 20 * time.Second,

@@ -30,6 +30,8 @@ type Settings struct {
 	Limits          Limits
 
 	UsernameMaxAttempts int
+	// BulkGenerateMax caps how many accounts one bulk generate may create.
+	BulkGenerateMax int
 	// FirstNames / LastNames replace the built-in name pools when non-empty.
 	FirstNames []string
 	LastNames  []string
@@ -43,9 +45,31 @@ type Settings struct {
 	MessageRetention     time.Duration
 	MessagePruneInterval time.Duration
 
+	// AutoMarkUsed moves AVAILABLE accounts to USED automatically: AutoMarkOff,
+	// AutoMarkFirstMessage (when the first email arrives) or AutoMarkOTPCopied (the UI
+	// marks it when an OTP or verification link is copied).
+	AutoMarkUsed string
+	// AccountCleanupAfter acts on accounts without mail for this long; 0 disables it.
+	AccountCleanupAfter time.Duration
+	// AccountCleanupAction is CleanupBlock or CleanupDelete.
+	AccountCleanupAction string
+
 	// IngestEnabled is reported to the UI; the ingest server itself is started in main.
 	IngestEnabled bool
 }
+
+// AutoMarkUsed modes.
+const (
+	AutoMarkOff          = "off"
+	AutoMarkFirstMessage = "first_message"
+	AutoMarkOTPCopied    = "otp_copied"
+)
+
+// Account cleanup actions.
+const (
+	CleanupBlock  = "block"
+	CleanupDelete = "delete"
+)
 
 func (s Settings) validate() error {
 	switch {
@@ -53,12 +77,26 @@ func (s Settings) validate() error {
 		return errors.New("tag and note limits must be greater than 0")
 	case s.UsernameMaxAttempts <= 0:
 		return errors.New("username max attempts must be greater than 0")
+	case s.BulkGenerateMax <= 0:
+		return errors.New("bulk generate max must be greater than 0")
 	case s.InboxSearchMaxPages <= 0:
 		return errors.New("inbox search max pages must be greater than 0")
 	case s.InboxSyncInterval < 0 || s.MailTMRequestDelay < 0 || s.MessageRetention < 0:
 		return errors.New("durations must not be negative")
 	case s.MessagePruneInterval <= 0:
 		return errors.New("message prune interval must be greater than 0")
+	case s.AccountCleanupAfter < 0:
+		return errors.New("account cleanup age must not be negative")
+	}
+	switch s.AutoMarkUsed {
+	case AutoMarkOff, AutoMarkFirstMessage, AutoMarkOTPCopied:
+	default:
+		return fmt.Errorf("auto mark used must be %s, %s or %s", AutoMarkOff, AutoMarkFirstMessage, AutoMarkOTPCopied)
+	}
+	switch s.AccountCleanupAction {
+	case CleanupBlock, CleanupDelete:
+	default:
+		return fmt.Errorf("account cleanup action must be %s or %s", CleanupBlock, CleanupDelete)
 	}
 	if _, err := regexp.Compile(s.LegacyUsernamePattern); err != nil {
 		return fmt.Errorf("legacy username pattern: %w", err)
@@ -151,6 +189,7 @@ var editableFields = []editableField{
 	intField("tagMaxLength", func(s *Settings) *int { return &s.Limits.TagMaxLength }),
 	intField("noteMaxLength", func(s *Settings) *int { return &s.Limits.NoteMaxLength }),
 	intField("usernameMaxAttempts", func(s *Settings) *int { return &s.UsernameMaxAttempts }),
+	intField("bulkGenerateMax", func(s *Settings) *int { return &s.BulkGenerateMax }),
 	listField("usernameFirstNames", func(s *Settings) *[]string { return &s.FirstNames }),
 	listField("usernameLastNames", func(s *Settings) *[]string { return &s.LastNames }),
 	stringField("legacyUsernamePattern", func(s *Settings) *string { return &s.LegacyUsernamePattern }, strings.TrimSpace),
@@ -158,7 +197,12 @@ var editableFields = []editableField{
 	durationField("inboxSyncInterval", func(s *Settings) *time.Duration { return &s.InboxSyncInterval }),
 	durationField("mailtmRequestDelay", func(s *Settings) *time.Duration { return &s.MailTMRequestDelay }),
 	durationField("messageRetention", func(s *Settings) *time.Duration { return &s.MessageRetention }),
+	stringField("autoMarkUsed", func(s *Settings) *string { return &s.AutoMarkUsed }, normalizeKeyword),
+	durationField("accountCleanupAfter", func(s *Settings) *time.Duration { return &s.AccountCleanupAfter }),
+	stringField("accountCleanupAction", func(s *Settings) *string { return &s.AccountCleanupAction }, normalizeKeyword),
 }
+
+func normalizeKeyword(v string) string { return strings.ToLower(strings.TrimSpace(v)) }
 
 func findField(key string) (editableField, bool) {
 	for _, f := range editableFields {
@@ -322,10 +366,12 @@ func (s *AccountService) UpdateSettings(ctx context.Context, patch SettingsPatch
 
 // ProviderStatus describes one provider for the settings page and the generate dialog.
 type ProviderStatus struct {
-	Name      string `json:"name"`
-	Label     string `json:"label"`
-	Domain    string `json:"domain,omitempty"`
-	Available bool   `json:"available"`
+	Name  string `json:"name"`
+	Label string `json:"label"`
+	// Domain is the first of Domains, kept for simple displays.
+	Domain    string   `json:"domain,omitempty"`
+	Domains   []string `json:"domains,omitempty"`
+	Available bool     `json:"available"`
 	// Error explains why the provider cannot generate accounts right now.
 	Error string `json:"error,omitempty"`
 }
@@ -349,6 +395,8 @@ type InboxSettings struct {
 	SearchMaxPages   int    `json:"searchMaxPages"`
 	MessageRetention string `json:"messageRetention"`
 	IngestEnabled    bool   `json:"ingestEnabled"`
+	// SendingEnabled is true when SMTP is configured, so replies can be sent.
+	SendingEnabled bool `json:"sendingEnabled"`
 }
 
 // providerDomainTimeout bounds the domain lookup per provider so a slow Mail.tm
@@ -371,12 +419,13 @@ func (s *AccountService) AppSettings(ctx context.Context) (AppSettings, error) {
 		p := s.providers[name]
 		status := ProviderStatus{Name: name, Label: p.Label()}
 		domainCtx, cancel := context.WithTimeout(ctx, providerDomainTimeout)
-		domain, err := p.PickDomain(domainCtx)
+		domains, err := p.Domains(domainCtx)
 		cancel()
 		if err != nil {
 			status.Error = err.Error()
 		} else {
-			status.Domain = domain
+			status.Domains = domains
+			status.Domain = domains[0]
 			status.Available = true
 		}
 		statuses = append(statuses, status)
@@ -405,6 +454,7 @@ func (s *AccountService) AppSettings(ctx context.Context) (AppSettings, error) {
 			SearchMaxPages:   settings.InboxSearchMaxPages,
 			MessageRetention: durationLabel(settings.MessageRetention),
 			IngestEnabled:    settings.IngestEnabled,
+			SendingEnabled:   s.SendingEnabled(),
 		},
 		Editable:   editableValues(settings),
 		Defaults:   editableValues(s.baseline),

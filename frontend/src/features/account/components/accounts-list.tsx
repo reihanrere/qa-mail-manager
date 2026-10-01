@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Plus, RefreshCcw, RefreshCw, Search, Users } from 'lucide-react'
+import { Download, Loader2, Plus, RefreshCcw, RefreshCw, Search, Users } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProviderLabel } from '../provider'
 import type { MailProviderName } from '@/types/settings'
@@ -149,6 +149,20 @@ export function AccountsList() {
             aria-label="Refresh accounts"
           >
             <RefreshCw className={cn('size-4', isRefreshing && 'animate-spin')} />
+          </Button>
+          <Button variant="outline" className="gap-2" asChild>
+            <a
+              href={accountApi.exportUrl({
+                search: search || undefined,
+                status: statusFilter === 'ALL' ? undefined : statusFilter,
+                provider: providerFilter === 'ALL' ? undefined : providerFilter,
+                legacy: legacyOnly || undefined,
+              })}
+              download
+            >
+              <Download className="size-4" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </a>
           </Button>
           <GenerateAccountDialog>
             <Button className="gap-2">

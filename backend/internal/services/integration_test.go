@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
@@ -16,6 +17,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"qa-mail-manager/internal/database"
+	"qa-mail-manager/internal/mailer"
 	"qa-mail-manager/internal/models"
 	"qa-mail-manager/internal/providers"
 )
@@ -278,3 +280,136 @@ func TestIntegrationStatsLegacyAndReplace(t *testing.T) {
 }
 
 func crlfBytes(s string) []byte { return []byte(strings.ReplaceAll(s, "\n", "\r\n")) }
+
+func TestIntegrationGenerateOnChosenDomain(t *testing.T) {
+	db := testDB(t)
+	settings := testSettings(providers.NameLocal)
+	s, err := NewAccountService(db, settings, remoteStub{stubProvider{providers.NameMailTM}},
+		providers.NewLocal(db, "re-testing.me", "qa-inbox.test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	account, err := s.GenerateAccount(ctx, GenerateAccountInput{Domain: "QA-Inbox.test"})
+	if err != nil || account.Domain != "qa-inbox.test" || !strings.HasSuffix(account.Email, "@qa-inbox.test") {
+		t.Fatalf("chosen domain not used: %+v %v", account, err)
+	}
+	if _, err := s.GenerateAccount(ctx, GenerateAccountInput{Domain: "gmail.com"}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for a foreign domain, got %v", err)
+	}
+}
+
+func TestIntegrationBulkGenerateAndExport(t *testing.T) {
+	db := testDB(t)
+	s := newIntegrationService(t, db)
+	ctx := context.Background()
+
+	result, err := s.GenerateAccounts(ctx, GenerateAccountInput{Tag: "=bulk", Note: "batch"}, 3)
+	if err != nil || len(result.Accounts) != 3 || result.Error != "" {
+		t.Fatalf("bulk: %+v %v", result, err)
+	}
+	if _, err := s.GenerateAccounts(ctx, GenerateAccountInput{}, 6); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput above BulkGenerateMax, got %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := s.ExportAccountsCSV(ctx, ListAccountsParams{Provider: providers.NameLocal}, &buf); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 4 || !strings.HasPrefix(lines[0], "email,provider,domain,status,tag") {
+		t.Fatalf("unexpected csv:\n%s", buf.String())
+	}
+	if strings.Contains(buf.String(), "password") || strings.Contains(lines[1], ",=bulk,") || !strings.Contains(lines[1], ",'=bulk,") {
+		t.Fatalf("csv must omit passwords and neutralise formulas:\n%s", buf.String())
+	}
+}
+
+func TestIntegrationAutoMarkUsedOnFirstMessage(t *testing.T) {
+	db := testDB(t)
+	s := newIntegrationService(t, db)
+	ctx := context.Background()
+	if err := s.UpdateSettings(ctx, SettingsPatch{Values: map[string]json.RawMessage{"autoMarkUsed": []byte(`"first_message"`)}}); err != nil {
+		t.Fatal(err)
+	}
+
+	account, _ := s.GenerateAccount(ctx, GenerateAccountInput{})
+	raw := crlfBytes(strings.ReplaceAll(integrationEmail, "{{TO}}", account.Email))
+	if _, err := s.IngestMessage(ctx, raw, account.Email); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := s.GetAccount(ctx, account.ID)
+	if stored.Status != models.StatusUsed {
+		t.Fatalf("expected USED after the first message, got %s", stored.Status)
+	}
+
+	// A tester who set it back to AVAILABLE is not overruled by later mail
+	_ = s.UpdateStatus(ctx, account.ID, models.StatusAvailable)
+	second := bytes.Replace(raw, []byte("invoice-1@"), []byte("invoice-9@"), 1)
+	if _, err := s.IngestMessage(ctx, second, account.Email); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = s.GetAccount(ctx, account.ID)
+	if stored.Status != models.StatusAvailable {
+		t.Fatalf("only the first message may auto-mark, got %s", stored.Status)
+	}
+}
+
+func TestIntegrationInactiveAccountCleanup(t *testing.T) {
+	db := testDB(t)
+	s := newIntegrationService(t, db)
+	ctx := context.Background()
+
+	old, _ := s.GenerateAccount(ctx, GenerateAccountInput{})
+	fresh, _ := s.GenerateAccount(ctx, GenerateAccountInput{})
+	db.Model(&models.MailAccount{}).Where("id = ?", old.ID).Update("created_at", time.Now().Add(-48*time.Hour))
+
+	settings := s.current()
+	settings.AccountCleanupAfter = 24 * time.Hour
+	settings.AccountCleanupAction = CleanupBlock
+	s.cleanupInactiveAccounts(ctx, settings)
+	if a, _ := s.GetAccount(ctx, old.ID); a.Status != models.StatusBlocked {
+		t.Fatalf("old account should be BLOCKED, got %s", a.Status)
+	}
+	if a, _ := s.GetAccount(ctx, fresh.ID); a.Status != models.StatusAvailable {
+		t.Fatalf("fresh account must be untouched, got %s", a.Status)
+	}
+
+	settings.AccountCleanupAction = CleanupDelete
+	s.cleanupInactiveAccounts(ctx, settings)
+	if _, err := s.GetAccount(ctx, old.ID); !errors.Is(err, ErrAccountNotFound) {
+		t.Fatalf("old account should be deleted, got %v", err)
+	}
+	if _, err := s.GetAccount(ctx, fresh.ID); err != nil {
+		t.Fatalf("fresh account must remain: %v", err)
+	}
+}
+
+func TestIntegrationSendValidation(t *testing.T) {
+	db := testDB(t)
+	s := newIntegrationService(t, db)
+	ctx := context.Background()
+	local, _ := s.GenerateAccount(ctx, GenerateAccountInput{})
+	remote, _ := s.GenerateAccount(ctx, GenerateAccountInput{Provider: providers.NameMailTM})
+	ok := SendMessageInput{To: []string{"support@shop.example"}, Subject: "Hi", Text: "Body"}
+
+	if _, err := s.SendMessage(ctx, local.ID, ok); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("sending without SMTP must be rejected as invalid input, got %v", err)
+	}
+
+	// Port 1 is never reached: every case below must fail validation first
+	s.SetMailer(mailer.New(mailer.Config{Host: "127.0.0.1", Port: 1, Security: mailer.SecurityNone}))
+	if _, err := s.SendMessage(ctx, remote.ID, ok); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("Mail.tm accounts must not send, got %v", err)
+	}
+	bad := ok
+	bad.To = []string{"not an address"}
+	if _, err := s.SendMessage(ctx, local.ID, bad); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("expected ErrInvalidInput for a bad recipient, got %v", err)
+	}
+	reply := ok
+	reply.ReplyTo = uuid.NewString()
+	if _, err := s.SendMessage(ctx, local.ID, reply); !errors.Is(err, providers.ErrMessageNotFound) {
+		t.Fatalf("expected ErrMessageNotFound for an unknown replyTo, got %v", err)
+	}
+}

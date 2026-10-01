@@ -96,3 +96,24 @@ func TestMarkLegacy(t *testing.T) {
 		t.Fatal("an empty pattern must disable the legacy check")
 	}
 }
+
+func TestCSVSafe(t *testing.T) {
+	for in, want := range map[string]string{"=SUM(A1)": "'=SUM(A1)", "+1": "'+1", "-x": "'-x", "@me": "'@me", "login": "login", "": ""} {
+		if got := csvSafe(in); got != want {
+			t.Errorf("%q: got %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestValidateRejectsUnknownModes(t *testing.T) {
+	bad := testSettings("mailtm")
+	bad.AutoMarkUsed = "always"
+	if err := bad.validate(); err == nil {
+		t.Fatal("expected an error for an unknown auto mark mode")
+	}
+	bad = testSettings("mailtm")
+	bad.AccountCleanupAction = "archive"
+	if err := bad.validate(); err == nil {
+		t.Fatal("expected an error for an unknown cleanup action")
+	}
+}

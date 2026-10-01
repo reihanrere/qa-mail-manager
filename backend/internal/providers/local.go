@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	stdhtml "html"
+	"math/rand/v2"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -32,17 +34,23 @@ var (
 	_ MailProvider = (*MailTM)(nil)
 )
 
-// Local serves mailboxes on our own catch-all domain. Addresses are minted without
+// Local serves mailboxes on our own catch-all domains. Addresses are minted without
 // any outbound call; inbound mail is stored in the messages table by the ingest endpoint.
 type Local struct {
-	db     *gorm.DB
-	domain string
+	db      *gorm.DB
+	domains []string
 }
 
-// NewLocal builds the local provider. An empty domain keeps existing inboxes
-// readable but makes PickDomain fail, so no new local accounts can be generated.
-func NewLocal(db *gorm.DB, domain string) *Local {
-	return &Local{db: db, domain: strings.ToLower(strings.TrimSpace(domain))}
+// NewLocal builds the local provider for one or more catch-all domains. With none,
+// existing inboxes stay readable but no new local accounts can be generated.
+func NewLocal(db *gorm.DB, domains ...string) *Local {
+	p := &Local{db: db}
+	for _, d := range domains {
+		if d = strings.ToLower(strings.TrimSpace(d)); d != "" && !slices.Contains(p.domains, d) {
+			p.domains = append(p.domains, d)
+		}
+	}
+	return p
 }
 
 func (p *Local) Name() string { return NameLocal }
@@ -50,10 +58,19 @@ func (p *Local) Name() string { return NameLocal }
 func (p *Local) Label() string { return "Own domain (catch-all)" }
 
 func (p *Local) PickDomain(context.Context) (string, error) {
-	if p.domain == "" {
+	if len(p.domains) == 0 {
 		return "", errors.New("local provider: CATCHALL_DOMAIN is not configured")
 	}
-	return p.domain, nil
+	// Spread accounts over the domains so one blocked domain affects fewer tests
+	return p.domains[rand.IntN(len(p.domains))], nil
+}
+
+// Domains lists every catch-all domain new addresses can use.
+func (p *Local) Domains(context.Context) ([]string, error) {
+	if len(p.domains) == 0 {
+		return nil, errors.New("local provider: CATCHALL_DOMAIN is not configured")
+	}
+	return slices.Clone(p.domains), nil
 }
 
 // CreateAddress needs no registration: the catch-all accepts every address, and the

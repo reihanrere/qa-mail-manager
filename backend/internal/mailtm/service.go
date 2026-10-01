@@ -30,6 +30,24 @@ func (s *Service) PickAvailableDomain(ctx context.Context) (string, error) {
 	return "", errors.New("no active mail.tm domain available")
 }
 
+// ActiveDomains lists every active domain.
+func (s *Service) ActiveDomains(ctx context.Context) ([]string, error) {
+	domains, err := s.client.GetDomains(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var active []string
+	for _, d := range domains {
+		if d.IsActive {
+			active = append(active, d.Domain)
+		}
+	}
+	if len(active) == 0 {
+		return nil, errors.New("no active mail.tm domain available")
+	}
+	return active, nil
+}
+
 // RegisterAccount creates a new account on Mail.tm and returns its remote ID.
 func (s *Service) RegisterAccount(ctx context.Context, address, password string) (string, error) {
 	account, err := s.client.CreateAccount(ctx, address, password)

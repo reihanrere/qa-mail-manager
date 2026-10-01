@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	"gorm.io/gorm"
 
 	"qa-mail-manager/internal/ingest"
 	"qa-mail-manager/internal/models"
@@ -135,6 +136,32 @@ func (s *AccountService) findLocalAccount(ctx context.Context, candidates []stri
 	return nil, ErrRecipientNotFound
 }
 
+// cleanupInactiveAccounts blocks or deletes accounts without mail (or, if they never got
+// any, created) longer ago than AccountCleanupAfter.
+func (s *AccountService) cleanupInactiveAccounts(ctx context.Context, settings Settings) {
+	if settings.AccountCleanupAfter <= 0 {
+		return
+	}
+	cutoff := time.Now().Add(-settings.AccountCleanupAfter)
+	inactive := s.db.WithContext(ctx).Model(&models.MailAccount{}).
+		Where("COALESCE(last_message_at, created_at) < ?", cutoff)
+
+	var result *gorm.DB
+	if settings.AccountCleanupAction == CleanupDelete {
+		result = inactive.Delete(&models.MailAccount{})
+	} else {
+		result = inactive.Where("status <> ?", models.StatusBlocked).Update("status", models.StatusBlocked)
+	}
+	if result.Error != nil {
+		log.Printf("account cleanup: %v", result.Error)
+		return
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("account cleanup: %s %d accounts inactive since %s", settings.AccountCleanupAction, result.RowsAffected, cutoff.Format(time.RFC3339))
+		s.events.Publish(Event{Type: EventAccountsChanged})
+	}
+}
+
 // StartMessagePruner deletes stored messages older than MessageRetention on every
 // MessagePruneInterval until ctx ends. A zero retention keeps messages; the value is
 // re-read every cycle so Settings changes apply live.
@@ -142,6 +169,7 @@ func (s *AccountService) StartMessagePruner(ctx context.Context) {
 	go func() {
 		for {
 			settings := s.current()
+			s.cleanupInactiveAccounts(ctx, settings)
 			if retention := settings.MessageRetention; retention > 0 {
 				cutoff := time.Now().Add(-retention)
 				result := s.db.WithContext(ctx).Where("created_at < ?", cutoff).Delete(&models.Message{})

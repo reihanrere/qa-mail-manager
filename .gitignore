@@ -9,3 +9,11 @@
 
 # Local Claude Code preview config (contains machine-specific absolute paths)
 .claude/
+
+# Playwright output
+frontend/test-results/
+frontend/playwright-report/
+
+# Playwright output
+frontend/test-results/
+frontend/playwright-report/

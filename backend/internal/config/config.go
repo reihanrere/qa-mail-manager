@@ -35,8 +35,9 @@ type Config struct {
 
 	// MailProvider is the default provider for new accounts: "mailtm" or "local".
 	MailProvider string
-	// CatchallDomain is our own domain served by the "local" provider; empty disables generation there.
-	CatchallDomain string
+	// CatchallDomains are our own domains served by the "local" provider (comma-separated
+	// CATCHALL_DOMAIN); empty disables generating there.
+	CatchallDomains []string
 
 	// IngestSecret authenticates the Cloudflare Email Worker; empty disables the ingest server.
 	IngestSecret string
@@ -48,11 +49,20 @@ type Config struct {
 
 	// MessageRetention deletes locally stored messages older than this; 0 keeps them forever.
 	MessageRetention time.Duration
-	// MessagePruneInterval is how often the retention cleanup runs.
+	// MessagePruneInterval is how often retention and account cleanup run.
 	MessagePruneInterval time.Duration
+
+	// AutoMarkUsed: off, first_message or otp_copied.
+	AutoMarkUsed string
+	// AccountCleanupAfter blocks/deletes accounts without mail for this long; 0 disables it.
+	AccountCleanupAfter time.Duration
+	// AccountCleanupAction: block or delete.
+	AccountCleanupAction string
 
 	// UsernameMaxAttempts bounds retries when a generated address is already taken.
 	UsernameMaxAttempts int
+	// BulkGenerateMax caps how many accounts one bulk generate may create.
+	BulkGenerateMax int
 	// UsernameFirstNames / UsernameLastNames override the built-in name pools when set.
 	UsernameFirstNames []string
 	UsernameLastNames  []string
@@ -64,6 +74,14 @@ type Config struct {
 	// Limits for the free-text labels attached to accounts (counted in characters).
 	TagMaxLength  int
 	NoteMaxLength int
+
+	// SMTP server for sending and replying from own-domain accounts; empty host disables it.
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	// SMTPSecurity: starttls (587), tls (465) or none (local test servers only).
+	SMTPSecurity string
 
 	// EventsHeartbeatInterval keeps the live-update stream open through proxies.
 	EventsHeartbeatInterval time.Duration
@@ -87,11 +105,17 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault("INGEST_MAX_BYTES", 25<<20) // Cloudflare Email Routing's own message limit
 	viper.SetDefault("MESSAGE_RETENTION", "720h")
 	viper.SetDefault("MESSAGE_PRUNE_INTERVAL", "1h")
+	viper.SetDefault("AUTO_MARK_USED", "off")
+	viper.SetDefault("ACCOUNT_CLEANUP_AFTER", "0")
+	viper.SetDefault("ACCOUNT_CLEANUP_ACTION", "block")
 	viper.SetDefault("USERNAME_MAX_ATTEMPTS", 5)
+	viper.SetDefault("BULK_GENERATE_MAX", 50)
 	viper.SetDefault("TAG_MAX_LENGTH", 50)
 	viper.SetDefault("NOTE_MAX_LENGTH", 500)
 	viper.SetDefault("LEGACY_USERNAME_PATTERN", "^qa_test_")
 	viper.SetDefault("EVENTS_HEARTBEAT_INTERVAL", "20s")
+	viper.SetDefault("SMTP_PORT", 587)
+	viper.SetDefault("SMTP_SECURITY", "starttls")
 
 	// .env is optional: containers pass configuration as real environment variables.
 	// SetConfigFile reports a missing file as fs.ErrNotExist, not ConfigFileNotFoundError.
@@ -116,8 +140,8 @@ func LoadConfig() (*Config, error) {
 		MailTMRequestDelay:  viper.GetDuration("MAILTM_REQUEST_DELAY"),
 		InboxSearchMaxPages: viper.GetInt("INBOX_SEARCH_MAX_PAGES"),
 
-		MailProvider:   strings.ToLower(strings.TrimSpace(viper.GetString("MAIL_PROVIDER"))),
-		CatchallDomain: strings.ToLower(strings.TrimSpace(viper.GetString("CATCHALL_DOMAIN"))),
+		MailProvider:    strings.ToLower(strings.TrimSpace(viper.GetString("MAIL_PROVIDER"))),
+		CatchallDomains: SplitList(viper.GetString("CATCHALL_DOMAIN")),
 
 		IngestSecret:   viper.GetString("INGEST_SECRET"),
 		IngestPort:     viper.GetString("INGEST_PORT"),
@@ -126,7 +150,12 @@ func LoadConfig() (*Config, error) {
 		MessageRetention:     viper.GetDuration("MESSAGE_RETENTION"),
 		MessagePruneInterval: viper.GetDuration("MESSAGE_PRUNE_INTERVAL"),
 
+		AutoMarkUsed:         strings.ToLower(strings.TrimSpace(viper.GetString("AUTO_MARK_USED"))),
+		AccountCleanupAfter:  viper.GetDuration("ACCOUNT_CLEANUP_AFTER"),
+		AccountCleanupAction: strings.ToLower(strings.TrimSpace(viper.GetString("ACCOUNT_CLEANUP_ACTION"))),
+
 		UsernameMaxAttempts: viper.GetInt("USERNAME_MAX_ATTEMPTS"),
+		BulkGenerateMax:     viper.GetInt("BULK_GENERATE_MAX"),
 		UsernameFirstNames:  SplitList(viper.GetString("USERNAME_FIRST_NAMES")),
 		UsernameLastNames:   SplitList(viper.GetString("USERNAME_LAST_NAMES")),
 
@@ -136,6 +165,12 @@ func LoadConfig() (*Config, error) {
 		NoteMaxLength: viper.GetInt("NOTE_MAX_LENGTH"),
 
 		EventsHeartbeatInterval: viper.GetDuration("EVENTS_HEARTBEAT_INTERVAL"),
+
+		SMTPHost:     strings.TrimSpace(viper.GetString("SMTP_HOST")),
+		SMTPPort:     viper.GetInt("SMTP_PORT"),
+		SMTPUsername: viper.GetString("SMTP_USERNAME"),
+		SMTPPassword: viper.GetString("SMTP_PASSWORD"),
+		SMTPSecurity: strings.ToLower(strings.TrimSpace(viper.GetString("SMTP_SECURITY"))),
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -151,6 +186,7 @@ func (c *Config) Validate() error {
 		"INBOX_SEARCH_MAX_PAGES": c.InboxSearchMaxPages,
 		"INGEST_MAX_BYTES":       c.IngestMaxBytes,
 		"USERNAME_MAX_ATTEMPTS":  c.UsernameMaxAttempts,
+		"BULK_GENERATE_MAX":      c.BulkGenerateMax,
 		"TAG_MAX_LENGTH":         c.TagMaxLength,
 		"NOTE_MAX_LENGTH":        c.NoteMaxLength,
 	}
@@ -169,6 +205,14 @@ func (c *Config) Validate() error {
 	}
 	if c.EventsHeartbeatInterval <= 0 {
 		problems = append(problems, "EVENTS_HEARTBEAT_INTERVAL must be greater than 0")
+	}
+	switch c.SMTPSecurity {
+	case "starttls", "tls", "none":
+	default:
+		problems = append(problems, "SMTP_SECURITY must be starttls, tls or none")
+	}
+	if c.SMTPHost != "" && (c.SMTPPort <= 0 || c.SMTPPort > 65535) {
+		problems = append(problems, "SMTP_PORT must be a valid port")
 	}
 	if _, err := regexp.Compile(c.LegacyUsernamePattern); err != nil {
 		problems = append(problems, "LEGACY_USERNAME_PATTERN is not a valid regular expression")

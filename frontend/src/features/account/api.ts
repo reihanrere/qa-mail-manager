@@ -1,4 +1,5 @@
 import { api } from '@/lib/axios'
+import { apiUrl } from '@/lib/api-url'
 import type { ApiResponse, Page } from '@/types/api'
 import type {
   MailAccount,
@@ -9,6 +10,8 @@ import type {
   GenerateAccountRequest,
   ListAccountsParams,
   ReplaceAccountResult,
+  BulkGenerateRequest,
+  BulkGenerateResult,
   UpdateAccountRequest,
   UpdateStatusRequest,
 } from '@/types/account'
@@ -41,6 +44,21 @@ export const accountApi = {
     const response = await api.post<AccountResponse>('/accounts/generate', data ?? {})
     return response.data.data
   },
+
+  generateBulk: async (data: BulkGenerateRequest): Promise<BulkGenerateResult> => {
+    const response = await api.post<ApiResponse<BulkGenerateResult>>('/accounts/generate/bulk', data)
+    return response.data.data
+  },
+
+  /** CSV download of every account matching the filters (no passwords) */
+  exportUrl: (params: Omit<ListAccountsParams, 'page' | 'limit'> = {}) =>
+    apiUrl('/accounts/export', {
+      search: params.search || undefined,
+      status: params.status,
+      provider: params.provider,
+      legacy: params.legacy || undefined,
+      sort: params.sort,
+    }),
 
   /** New address with the same provider and labels; the old account becomes BLOCKED */
   replace: async (id: string): Promise<ReplaceAccountResult> => {

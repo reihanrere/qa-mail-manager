@@ -6,10 +6,12 @@ import type { OTPResult } from '@/types/message'
 
 interface OTPCardProps {
   otp: OTPResult
+  /** Called after the code was copied (e.g. to mark the account as used) */
+  onCopied?: () => void
 }
 
 /** Highlights a detected verification code with a copy-to-clipboard button. */
-export function OTPCard({ otp }: OTPCardProps) {
+export function OTPCard({ otp, onCopied }: OTPCardProps) {
   const [copied, setCopied] = useState(false)
   const [copying, setCopying] = useState(false)
 
@@ -17,6 +19,7 @@ export function OTPCard({ otp }: OTPCardProps) {
     setCopying(true)
     try {
       await navigator.clipboard.writeText(otp.code)
+      onCopied?.()
       setCopied(true)
       toast.success('OTP copied to clipboard')
       setTimeout(() => setCopied(false), 2000)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"qa-mail-manager/internal/mailer"
 	"qa-mail-manager/internal/models"
 	"qa-mail-manager/internal/providers"
 )
@@ -24,6 +26,7 @@ type AccountService struct {
 	db        *gorm.DB
 	providers map[string]providers.MailProvider
 	events    *EventHub
+	mailer    *mailer.Mailer
 	// baseline holds the environment settings; overrides from the Settings page are
 	// layered on top of it into settings.
 	baseline Settings
@@ -96,6 +99,8 @@ type GenerateAccountInput struct {
 	Tag      string
 	Note     string
 	Provider string
+	// Domain picks one of the provider's domains; empty lets the provider choose.
+	Domain string
 }
 
 // Validate trims the labels and enforces their length limits (counted in characters).
@@ -103,6 +108,7 @@ func (in *GenerateAccountInput) Validate(limits Limits) error {
 	in.Tag = strings.TrimSpace(in.Tag)
 	in.Note = strings.TrimSpace(in.Note)
 	in.Provider = strings.ToLower(strings.TrimSpace(in.Provider))
+	in.Domain = strings.ToLower(strings.TrimSpace(in.Domain))
 	if err := validateLabel("tag", in.Tag, limits.TagMaxLength); err != nil {
 		return err
 	}
@@ -171,9 +177,20 @@ func (s *AccountService) GenerateAccount(ctx context.Context, input GenerateAcco
 		return nil, fmt.Errorf("%w: unknown provider %q", ErrInvalidInput, input.Provider)
 	}
 
-	domain, err := provider.PickDomain(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pick %s domain: %w", providerName, err)
+	domain := input.Domain
+	if domain != "" {
+		domains, err := provider.Domains(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list %s domains: %w", providerName, err)
+		}
+		if !slices.Contains(domains, domain) {
+			return nil, fmt.Errorf("%w: %q is not a %s domain", ErrInvalidInput, domain, providerName)
+		}
+	} else {
+		var err error
+		if domain, err = provider.PickDomain(ctx); err != nil {
+			return nil, fmt.Errorf("failed to pick %s domain: %w", providerName, err)
+		}
 	}
 
 	password, err := randomString(16)

@@ -5,12 +5,20 @@ import { Button } from '@/components/ui/button'
 import type { VerificationLink } from '../utils/links'
 
 /** Highlights detected verification / login / reset links with open and copy buttons. */
-export function VerificationLinkCard({ links }: { links: VerificationLink[] }) {
+export function VerificationLinkCard({
+  links,
+  onUsed,
+}: {
+  links: VerificationLink[]
+  /** Called when a link is opened or copied (e.g. to mark the account as used) */
+  onUsed?: () => void
+}) {
   const [copied, setCopied] = useState<string | null>(null)
 
   const copy = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url)
+      onUsed?.()
       setCopied(url)
       toast.success('Link copied')
       setTimeout(() => setCopied(null), 1500)
@@ -35,7 +43,7 @@ export function VerificationLinkCard({ links }: { links: VerificationLink[] }) {
               </p>
             </div>
             <Button variant="outline" size="sm" className="shrink-0 gap-1.5" asChild>
-              <a href={link.url} target="_blank" rel="noreferrer noopener">
+              <a href={link.url} target="_blank" rel="noreferrer noopener" onClick={onUsed}>
                 <ExternalLink className="size-3.5" />
                 Open
               </a>

@@ -31,7 +31,13 @@ interface LabelsFormValues {
   note: string
   /** Generate dialog only */
   provider?: MailProviderName
+  /** Generate dialog only; RANDOM_DOMAIN lets the provider pick */
+  domain?: string
+  /** Generate dialog only: how many accounts to create */
+  count?: string
 }
+
+const RANDOM_DOMAIN = '__random__'
 
 type Limits = AppSettings['limits']
 
@@ -47,14 +53,30 @@ export function GenerateAccountDialog({ children }: { children: ReactNode }) {
   const settings = useAppSettings()
 
   const generate = useMutation({
-    mutationFn: (values: LabelsFormValues) =>
-      accountApi.generate({
+    mutationFn: async (values: LabelsFormValues) => {
+      const request = {
         tag: values.tag.trim() || undefined,
         note: values.note.trim() || undefined,
         provider: values.provider,
-      }),
-    onSuccess: (account) => {
-      toast.success(`Generated ${account.email}`)
+        domain: values.domain && values.domain !== RANDOM_DOMAIN ? values.domain : undefined,
+      }
+      const count = Number(values.count ?? 1)
+      if (count > 1) return accountApi.generateBulk({ ...request, count })
+      const account = await accountApi.generate(request)
+      return { accounts: [account], requested: 1, error: undefined }
+    },
+    onSuccess: (result) => {
+      const emails = result.accounts.map((a) => a.email)
+      if (emails.length === 1) {
+        toast.success(`Generated ${emails[0]}`)
+      } else {
+        toast.success(`Generated ${emails.length} accounts`, {
+          description: emails.slice(0, 3).join(', ') + (emails.length > 3 ? ', …' : ''),
+        })
+      }
+      if (result.error) {
+        toast.warning(`Stopped after ${emails.length} of ${result.requested}`, { description: result.error })
+      }
       queryClient.invalidateQueries({ queryKey: accountKeys.all })
       setOpen(false)
       setFormKey((key) => key + 1)
@@ -64,8 +86,9 @@ export function GenerateAccountDialog({ children }: { children: ReactNode }) {
 
   return (
     <LabelsDialog
-      // Remount once settings arrive so the provider default is applied
-      key={`${formKey}-${settings.dataUpdatedAt}`}
+      // Remount once when settings first arrive so the provider default is applied; later
+      // refetches (on open) must not reset what the user is typing
+      key={`${formKey}-${settings.data ? 'ready' : 'loading'}`}
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
@@ -81,7 +104,14 @@ export function GenerateAccountDialog({ children }: { children: ReactNode }) {
       limits={settings.data?.limits}
       providers={settings.data?.providers ?? []}
       providersLoading={settings.isPending}
-      defaultValues={{ tag: '', note: '', provider: initialProvider(settings.data) }}
+      maxCount={settings.data?.editable.bulkGenerateMax}
+      defaultValues={{
+        tag: '',
+        note: '',
+        provider: initialProvider(settings.data),
+        domain: RANDOM_DOMAIN,
+        count: '1',
+      }}
     />
   )
 }
@@ -142,6 +172,8 @@ interface LabelsDialogProps {
   /** When given, a provider picker is shown (generate dialog) */
   providers?: ProviderStatus[]
   providersLoading?: boolean
+  /** When given, a "how many" field allows bulk generation up to this count */
+  maxCount?: number
   mutation: {
     mutate: (values: LabelsFormValues) => void
     reset: () => void
@@ -165,18 +197,22 @@ function LabelsDialog({
   limits,
   providers,
   providersLoading = false,
+  maxCount,
 }: LabelsDialogProps) {
   const {
     register,
     handleSubmit,
     reset,
     control,
+    setValue,
     formState: { errors, isDirty },
   } = useForm<LabelsFormValues>({ defaultValues })
 
   const showProviders = providers !== undefined
   const selectedProvider = useWatch({ control, name: 'provider' })
-  const selectedDomain = providers?.find((p) => p.name === selectedProvider)?.domain
+  const selectedStatus = providers?.find((p) => p.name === selectedProvider)
+  const selectedDomain = selectedStatus?.domain
+  const domainChoices = selectedStatus?.domains ?? []
   const noUsableProvider = showProviders && !providersLoading && !providers.some((p) => p.available)
   const tagLength = charCount(useWatch({ control, name: 'tag' }))
   const noteLength = charCount(useWatch({ control, name: 'note' }))
@@ -211,7 +247,11 @@ function LabelsDialog({
                 render={({ field }) => (
                   <Select
                     value={field.value ?? ''}
-                    onValueChange={(value) => field.onChange(value as MailProviderName)}
+                    onValueChange={(value) => {
+                      field.onChange(value as MailProviderName)
+                      // Domains differ per provider
+                      setValue('domain', RANDOM_DOMAIN)
+                    }}
                     disabled={mutation.isPending || providersLoading || noUsableProvider}
                   >
                     <SelectTrigger id="account-provider" className="w-full" aria-invalid={!!errors.provider}>
@@ -244,6 +284,66 @@ function LabelsDialog({
                     Address will look like <span className="font-mono">name.surname@{selectedDomain}</span>
                   </p>
                 )
+              )}
+            </div>
+          )}
+
+          {showProviders && domainChoices.length > 1 && (
+            <div className="grid gap-2">
+              <Label htmlFor="account-domain">Domain</Label>
+              <Controller
+                control={control}
+                name="domain"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? RANDOM_DOMAIN}
+                    onValueChange={field.onChange}
+                    disabled={mutation.isPending}
+                  >
+                    <SelectTrigger id="account-domain" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={RANDOM_DOMAIN}>Random ({domainChoices.length} domains)</SelectItem>
+                      {domainChoices.map((domain) => (
+                        <SelectItem key={domain} value={domain}>
+                          <span className="font-mono">@{domain}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+          )}
+
+          {maxCount !== undefined && (
+            <div className="grid gap-2">
+              <Label htmlFor="account-count">How many</Label>
+              <Input
+                id="account-count"
+                type="number"
+                min={1}
+                max={maxCount}
+                className="w-28"
+                aria-invalid={!!errors.count}
+                disabled={mutation.isPending}
+                {...register('count', {
+                  validate: (value) => {
+                    const n = Number(value)
+                    return (
+                      (Number.isInteger(n) && n >= 1 && n <= maxCount) ||
+                      `Enter a number from 1 to ${maxCount}`
+                    )
+                  },
+                })}
+              />
+              {errors.count ? (
+                <p className="text-xs text-destructive">{errors.count.message}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Up to {maxCount} at once, all with the same tag and note.
+                </p>
               )}
             </div>
           )}

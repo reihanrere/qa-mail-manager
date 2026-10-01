@@ -52,6 +52,15 @@ services:
       NOTE_MAX_LENGTH: ${NOTE_MAX_LENGTH:-}
       LEGACY_USERNAME_PATTERN: ${LEGACY_USERNAME_PATTERN:-}
       EVENTS_HEARTBEAT_INTERVAL: ${EVENTS_HEARTBEAT_INTERVAL:-}
+      BULK_GENERATE_MAX: ${BULK_GENERATE_MAX:-}
+      AUTO_MARK_USED: ${AUTO_MARK_USED:-}
+      ACCOUNT_CLEANUP_AFTER: ${ACCOUNT_CLEANUP_AFTER:-}
+      ACCOUNT_CLEANUP_ACTION: ${ACCOUNT_CLEANUP_ACTION:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-}
       TZ: ${TZ:-Asia/Jakarta}
     # Not published: reached through the frontend's nginx at /api, /health and /docs.
     # The ingest server (INGEST_PORT, default 8081) is reached only by cloudflared.

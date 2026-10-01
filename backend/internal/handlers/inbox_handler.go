@@ -65,6 +65,23 @@ func (h *InboxHandler) MarkMessageRead(c fiber.Ctx) error {
 	return utils.Success(c, http.StatusOK, "Success", fiber.Map{"seen": true})
 }
 
+// SendMessage handles POST /api/accounts/:id/messages/send.
+func (h *InboxHandler) SendMessage(c fiber.Ctx) error {
+	id, err := parseAccountID(c)
+	if err != nil {
+		return respondError(c, err, http.StatusBadRequest)
+	}
+	var body services.SendMessageInput
+	if err := c.Bind().Body(&body); err != nil {
+		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+	}
+	result, err := h.service.SendMessage(c.Context(), id, body)
+	if err != nil {
+		return respondError(c, err, http.StatusBadGateway)
+	}
+	return utils.Success(c, http.StatusCreated, "Success", result)
+}
+
 // GetAttachment handles GET /api/accounts/:id/messages/:messageId/attachments/:attachmentId.
 // ?download=1 forces a download instead of letting the browser display the file.
 func (h *InboxHandler) GetAttachment(c fiber.Ctx) error {

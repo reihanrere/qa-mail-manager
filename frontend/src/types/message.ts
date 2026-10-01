@@ -51,3 +51,18 @@ export interface OTPResult {
   code: string
   length: number
 }
+
+/** Body of `POST /api/accounts/:id/messages/send`. */
+export interface SendMessageRequest {
+  to: string[]
+  subject: string
+  text: string
+  /** Id of the message being answered (threads the reply) */
+  replyTo?: string
+}
+
+export interface SendMessageResult {
+  messageId: string
+  from: string
+  to: string[]
+}

@@ -597,6 +597,95 @@ paths:
         '404':
           description: Account or message not found (or stored before raw sources were kept)
 
+  /api/accounts/generate/bulk:
+    post:
+      tags: [Accounts]
+      summary: Generate several accounts with the same labels
+      description: Up to BULK_GENERATE_MAX. Stops at the first failure and keeps what was created (see `error`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/GenerateAccountRequest'
+                - type: object
+                  required: [count]
+                  properties:
+                    count:
+                      type: integer
+                      minimum: 1
+      responses:
+        '201':
+          description: Accounts created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      accounts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MailAccount'
+                      requested:
+                        type: integer
+                      error:
+                        type: string
+        '400':
+          description: Invalid count or labels
+
+  /api/accounts/export:
+    get:
+      tags: [Accounts]
+      summary: Export accounts as CSV
+      description: Same filters as GET /api/accounts (search, status, provider, legacy). Passwords are never exported.
+      responses:
+        '200':
+          description: CSV file
+          content:
+            text/csv:
+              schema:
+                type: string
+
+  /api/accounts/{id}/messages/send:
+    post:
+      tags: [Inbox]
+      summary: Send or reply from an own-domain account
+      description: >
+        Plain text through the configured SMTP server (SMTP_HOST). Mail.tm accounts cannot send.
+        `replyTo` (a message id from this inbox) threads the reply with In-Reply-To/References.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+                subject:
+                  type: string
+                text:
+                  type: string
+                replyTo:
+                  type: string
+      responses:
+        '201':
+          description: Sent
+        '400':
+          description: Sending disabled, Mail.tm account, or invalid input
+        '502':
+          description: SMTP server refused or unreachable
+
   /api/accounts/{id}/replace:
     post:
       tags: [Accounts]
@@ -704,6 +793,9 @@ components:
           type: string
           enum: [mailtm, local]
           description: Omit to use the server default (MAIL_PROVIDER)
+        domain:
+          type: string
+          description: One of the provider's domains (GET /api/settings); omit to pick at random
 
     AppSettings:
       type: object
@@ -752,6 +844,9 @@ components:
               example: 720h0m0s
             ingestEnabled:
               type: boolean
+            sendingEnabled:
+              type: boolean
+              description: SMTP is configured
 
     UpdateStatusRequest:
       type: object

@@ -21,6 +21,22 @@ func TestLocalPickDomain(t *testing.T) {
 	}
 }
 
+func TestLocalMultipleDomains(t *testing.T) {
+	p := NewLocal(nil, "a.test", " B.test ", "a.test", "")
+	domains, err := p.Domains(context.Background())
+	if err != nil || strings.Join(domains, ",") != "a.test,b.test" {
+		t.Fatalf("got %v, %v", domains, err)
+	}
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		d, _ := p.PickDomain(context.Background())
+		seen[d] = true
+	}
+	if !seen["a.test"] || !seen["b.test"] {
+		t.Fatalf("PickDomain should spread over every domain, saw %v", seen)
+	}
+}
+
 func TestLocalCreateAddressReturnsUniqueIDs(t *testing.T) {
 	p := NewLocal(nil, "re-testing.me")
 	a, _ := p.CreateAddress(context.Background(), "a@re-testing.me", "pw")

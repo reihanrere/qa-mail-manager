@@ -66,6 +66,20 @@ export interface GenerateAccountRequest {
   note?: string
   /** Omit to use the server default */
   provider?: MailProviderName
+  /** One of the provider's domains; omit to let the provider pick */
+  domain?: string
+}
+
+/** Body of `POST /api/accounts/generate/bulk`. */
+export interface BulkGenerateRequest extends GenerateAccountRequest {
+  count: number
+}
+
+/** Response of a bulk generate; `error` is set when it stopped early (created accounts are kept). */
+export interface BulkGenerateResult {
+  accounts: MailAccount[]
+  requested: number
+  error?: string
 }
 
 /** Omitted fields are unchanged; an empty string clears the value */

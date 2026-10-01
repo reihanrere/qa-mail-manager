@@ -1,7 +1,14 @@
 import { api } from '@/lib/axios'
 import { apiUrl } from '@/lib/api-url'
-import type { Page } from '@/types/api'
-import type { Message, MessageDetail, MessageListResponse, MessageDetailResponse } from '@/types/message'
+import type { ApiResponse, Page } from '@/types/api'
+import type {
+  Message,
+  MessageDetail,
+  MessageListResponse,
+  MessageDetailResponse,
+  SendMessageRequest,
+  SendMessageResult,
+} from '@/types/message'
 
 /** Inbox endpoints; the backend reads the mailbox from the account's provider. */
 export const inboxApi = {
@@ -26,6 +33,15 @@ export const inboxApi = {
 
   markAsRead: async (accountId: string, messageId: string): Promise<void> => {
     await api.patch(`/accounts/${accountId}/messages/${messageId}/read`)
+  },
+
+  /** Sends a plain-text email from an own-domain account; `replyTo` threads it with a message */
+  sendMessage: async (accountId: string, data: SendMessageRequest): Promise<SendMessageResult> => {
+    const response = await api.post<ApiResponse<SendMessageResult>>(
+      `/accounts/${accountId}/messages/send`,
+      data,
+    )
+    return response.data.data
   },
 
   /** Link to an attachment; `download` forces a file download instead of opening it */

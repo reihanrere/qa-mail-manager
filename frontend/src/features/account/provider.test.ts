@@ -9,7 +9,13 @@ const settings = (
   defaultProvider,
   providers,
   limits: { tagMaxLength: 50, noteMaxLength: 500 },
-  inbox: { syncInterval: '2m0s', searchMaxPages: 10, messageRetention: 'disabled', ingestEnabled: false },
+  inbox: {
+    syncInterval: '2m0s',
+    searchMaxPages: 10,
+    messageRetention: 'disabled',
+    ingestEnabled: false,
+    sendingEnabled: false,
+  },
   editable: editable(defaultProvider),
   defaults: editable(defaultProvider),
   overridden: [],
@@ -20,6 +26,7 @@ const editable = (defaultProvider: AppSettings['defaultProvider']): EditableSett
   tagMaxLength: 50,
   noteMaxLength: 500,
   usernameMaxAttempts: 5,
+  bulkGenerateMax: 50,
   usernameFirstNames: [],
   usernameLastNames: [],
   legacyUsernamePattern: '^qa_test_',
@@ -27,6 +34,9 @@ const editable = (defaultProvider: AppSettings['defaultProvider']): EditableSett
   inboxSyncInterval: '2m0s',
   mailtmRequestDelay: '400ms',
   messageRetention: '720h0m0s',
+  autoMarkUsed: 'off',
+  accountCleanupAfter: '0s',
+  accountCleanupAction: 'block',
 })
 
 const local: ProviderStatus = { name: 'local', label: 'Own domain', domain: 're-testing.me', available: true }

@@ -8,6 +8,7 @@ import {
   Mail,
   Paperclip,
   RefreshCw,
+  Reply,
   Trash2,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -33,12 +34,16 @@ import { EmptyState } from '@/components/common/empty-state'
 import { cn } from '@/lib/utils'
 import { inboxApi } from '@/features/inbox/api'
 import { messageKeys, removeMessageFromCache, setMessageSeenInCache } from '@/features/inbox/queries'
-import { accountKeys } from '@/features/account/queries'
+import { accountKeys, useAccount } from '@/features/account/queries'
 import { extractOTPFromMessage } from '@/features/inbox/utils/otp'
 import { formatBytes, getInitials, getSenderAddress, getSenderName } from '@/features/inbox/utils/format'
 import { resolveCidImages } from '@/features/inbox/utils/cid'
 import type { MessageAttachment } from '@/types/message'
 import { OTPCard } from './otp-card'
+import { ComposeDialog } from './compose-dialog'
+import { replyDefaults } from '@/features/inbox/utils/compose'
+import { useAutoMarkUsed } from '@/features/inbox/use-auto-mark-used'
+import { useAppSettings } from '@/features/settings/queries'
 import { VerificationLinkCard } from './verification-link-card'
 import { extractVerificationLinks } from '@/features/inbox/utils/links'
 
@@ -68,6 +73,10 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
   })
 
   const markAsRead = useMarkAsRead(accountId)
+  const { data: settings } = useAppSettings()
+  const { data: account } = useAccount(accountId)
+  // Only own-domain accounts can send; Mail.tm's domain is not ours to send from
+  const canSend = !!settings?.inbox.sendingEnabled && account?.provider === 'local'
   const attemptedIds = useRef(new Set<string>())
 
   // Opening a message does not mark it read on Mail.tm, so do it explicitly (once per message)
@@ -117,6 +126,18 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
               </TooltipTrigger>
               <TooltipContent>View source (raw email and headers)</TooltipContent>
             </Tooltip>
+            {canSend && (
+              <ComposeDialog
+                accountId={accountId}
+                from={account!.email}
+                defaults={replyDefaults(message)}
+                replyTo={message.id}
+              >
+                <Button variant="ghost" size="icon" aria-label="Reply">
+                  <Reply className="size-4" />
+                </Button>
+              </ComposeDialog>
+            )}
             <DeleteMessageButton accountId={accountId} message={message} onDeleted={onDeleted} />
           </>
         )}
@@ -273,6 +294,7 @@ type MessageData = Awaited<ReturnType<typeof inboxApi.getMessage>>
 function MessageContent({ accountId, message }: { accountId: string; message: MessageData }) {
   const otp = extractOTPFromMessage(message)
   const links = extractVerificationLinks(message)
+  const markUsed = useAutoMarkUsed(accountId)
   const senderName = getSenderName(message.from)
   const senderAddress = getSenderAddress(message.from)
   const toLabels = (message.to ?? []).map((t) => t.address).join(', ')
@@ -316,13 +338,13 @@ function MessageContent({ accountId, message }: { accountId: string; message: Me
 
       {otp && (
         <div className="shrink-0 px-4 pt-4">
-          <OTPCard otp={otp} />
+          <OTPCard otp={otp} onCopied={markUsed} />
         </div>
       )}
 
       {links.length > 0 && (
         <div className="shrink-0 px-4 pt-4">
-          <VerificationLinkCard links={links} />
+          <VerificationLinkCard links={links} onUsed={markUsed} />
         </div>
       )}
 

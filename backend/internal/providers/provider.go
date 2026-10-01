@@ -48,8 +48,10 @@ type MailProvider interface {
 	Name() string
 	// Label is the human-readable name shown in the UI.
 	Label() string
-	// PickDomain returns the domain new addresses are created on.
+	// PickDomain returns the domain a new address is created on when none is requested.
 	PickDomain(ctx context.Context) (string, error)
+	// Domains lists every domain new addresses can be created on.
+	Domains(ctx context.Context) ([]string, error)
 	// CreateAddress registers the mailbox and returns its provider-side id.
 	// It returns ErrAddressTaken when the address is already in use.
 	CreateAddress(ctx context.Context, email, password string) (string, error)
