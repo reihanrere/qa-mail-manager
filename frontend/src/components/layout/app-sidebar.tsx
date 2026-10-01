@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { useTranslation } from 'react-i18next'
 import { ChevronsLeft, ChevronsRight, Inbox, LayoutDashboard, Settings, Users, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -7,10 +8,10 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store/app.store'
 
 const navItems = [
-  { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard, disabled: false },
-  { label: 'Accounts', to: '/accounts', icon: Users, disabled: false },
-  { label: 'Inbox', to: '/inbox', icon: Inbox, disabled: false },
-  { label: 'Settings', to: '/settings', icon: Settings, disabled: false },
+  { label: 'nav.dashboard', to: '/dashboard', icon: LayoutDashboard, disabled: false },
+  { label: 'nav.accounts', to: '/accounts', icon: Users, disabled: false },
+  { label: 'nav.inbox', to: '/inbox', icon: Inbox, disabled: false },
+  { label: 'nav.settings', to: '/settings', icon: Settings, disabled: false },
 ] as const
 
 interface AppSidebarProps {
@@ -24,6 +25,7 @@ interface AppSidebarProps {
  * opened from the header and closes after navigating.
  */
 export function AppSidebar({ className, mobile = false }: AppSidebarProps) {
+  const { t } = useTranslation()
   const collapsedPreference = useAppStore((state) => state.sidebarCollapsed)
   const sidebarCollapsed = !mobile && collapsedPreference
   const toggleSidebar = useAppStore((state) => state.toggleSidebar)
@@ -43,7 +45,7 @@ export function AppSidebar({ className, mobile = false }: AppSidebarProps) {
         className,
       )}
     >
-      <div className="flex h-14 items-center gap-2 px-4">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-semibold text-primary-foreground">
           Q
         </div>
@@ -51,7 +53,12 @@ export function AppSidebar({ className, mobile = false }: AppSidebarProps) {
           <>
             <SheetTitle className="min-w-0 flex-1 truncate text-sm font-semibold">QA Mail Manager</SheetTitle>
             <SheetClose asChild>
-              <Button variant="ghost" size="icon" className="-mr-2 shrink-0" aria-label="Close sidebar">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="-mr-2 shrink-0"
+                aria-label={t('nav.closeSidebar')}
+              >
                 <X className="size-4" />
               </Button>
             </SheetClose>
@@ -60,8 +67,6 @@ export function AppSidebar({ className, mobile = false }: AppSidebarProps) {
           !sidebarCollapsed && <span className="truncate text-sm font-semibold">QA Mail Manager</span>
         )}
       </div>
-
-      <Separator />
 
       <nav className="flex flex-1 flex-col gap-1 p-2">
         {navItems.map((item) => {
@@ -77,7 +82,7 @@ export function AppSidebar({ className, mobile = false }: AppSidebarProps) {
                 )}
               >
                 <Icon className="size-4 shrink-0" />
-                {!sidebarCollapsed && <span>{item.label}</span>}
+                {!sidebarCollapsed && <span>{t(item.label)}</span>}
               </div>
             )
           }
@@ -94,7 +99,7 @@ export function AppSidebar({ className, mobile = false }: AppSidebarProps) {
               activeProps={{ className: 'bg-accent text-accent-foreground' }}
             >
               <Icon className="size-4 shrink-0" />
-              {!sidebarCollapsed && <span>{item.label}</span>}
+              {!sidebarCollapsed && <span>{t(item.label)}</span>}
             </Link>
           )
         })}
@@ -108,7 +113,7 @@ export function AppSidebar({ className, mobile = false }: AppSidebarProps) {
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
             >
               {sidebarCollapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
             </Button>

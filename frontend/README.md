@@ -14,7 +14,8 @@ Frontend for the QA Mail Manager internal tool: generate and manage test account
   - verification codes are detected only next to an OTP keyword (code, OTP, kode, verifikasi, …) and can be copied in one click; verification / login / reset links get Open and Copy buttons;
   - own-domain accounts can reply when the backend has SMTP configured.
 - **Live updates** — new mail appears at once over server-sent events, with one grouped toast per burst (can be muted in Settings).
-- **Settings** — editable backend settings (saved overrides, reset to default), provider status, theme, sidebar preference, notifications, backend connection status.
+- **Settings** — editable backend settings (saved overrides, reset to default), provider status, theme, language, sidebar preference, notifications, backend connection status.
+- **English / Indonesian** — the browser language picks the default; the header button and Settings switch it. Backend errors are translated from their `code`.
 - Responsive: below 1024 px the inbox becomes a single-pane flow; below 768 px the sidebar moves into a sheet.
 
 ## Tech Stack
@@ -107,7 +108,7 @@ src/
 │   ├── account/
 │   │   ├── api.ts       # /accounts endpoints
 │   │   ├── queries.ts   # query keys + infinite/stats/detail hooks
-│   │   ├── status.ts    # status labels and colours shared across pages
+│   │   ├── status.ts    # status order and colours shared across pages
 │   │   ├── provider.ts  # default provider choice for the generate dialog
 │   │   └── components/  # accounts table, generate/edit dialogs, provider badge
 │   ├── inbox/
@@ -118,6 +119,7 @@ src/
 │   ├── live/            # server-sent events: cache invalidation and new-mail toasts
 │   └── settings/        # /settings endpoints and the editable settings form
 ├── hooks/               # useMediaQuery, useDebouncedValue, useRefresh
+├── i18n/                # i18next setup, language switch, date-fns locale; locales/en.ts and locales/id.ts
 ├── lib/                 # axios instance, query client, api-error helper, cn()
 ├── providers/           # AppProviders, QueryProvider, ThemeProvider
 ├── routes/              # TanStack Router file-based routes (dashboard, accounts, inbox, settings)
@@ -171,6 +173,19 @@ bunx shadcn@latest add <component-name>
 
 - `useAppStore` (`src/store/app.store.ts`) — `sidebarCollapsed` (persisted), mobile sidebar sheet state
 - `useThemeStore` (`src/store/theme.store.ts`) — `theme`, `setTheme()` (defaults to `dark`, persisted)
+
+The interface language is held by i18next (`src/i18n`), not Zustand: `setLanguage()` switches and
+persists it under the `language` localStorage key, and `null` returns to the browser language.
+
+## Translations
+
+Strings live in `src/i18n/locales/en.ts`; `id.ts` must have the same shape, which the compiler
+checks, and `t()` only accepts existing keys. Plurals use i18next's `_one` / `_other` suffixes
+(Indonesian repeats the same text in both). Format dates with `{ locale: dateLocale() }`.
+
+API errors carry a stable `code` and `params`; `apiErrorMessage()` translates `errors.<code>` and
+falls back to the English `message` for unknown codes. Add the code to both locale files when the
+backend gains a new one.
 
 Server data (accounts, messages) lives in TanStack Query, not Zustand. All account query keys start with
 `["accounts"]`, so invalidating that prefix refreshes lists, stats and details together.

@@ -1,10 +1,11 @@
+import i18n from '@/i18n'
 import type { MessageAddress } from '@/types/message'
 
 /** Display name of a sender, falling back to the address and then a placeholder. */
 export function getSenderName(from: MessageAddress | string | null | undefined): string {
-  if (!from) return 'Unknown sender'
+  if (!from) return i18n.t('common.unknownSender')
   if (typeof from === 'string') return from
-  return from.name?.trim() || from.address || 'Unknown sender'
+  return from.name?.trim() || from.address || i18n.t('common.unknownSender')
 }
 
 /** Sender's email address, or an empty string. */

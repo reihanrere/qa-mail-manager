@@ -73,7 +73,7 @@ func (h *InboxHandler) SendMessage(c fiber.Ctx) error {
 	}
 	var body services.SendMessageInput
 	if err := c.Bind().Body(&body); err != nil {
-		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+		return utils.Error(c, http.StatusBadRequest, codeInvalidBody, "invalid request body", nil)
 	}
 	result, err := h.service.SendMessage(c.Context(), id, body)
 	if err != nil {

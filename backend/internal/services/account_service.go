@@ -131,7 +131,8 @@ func (in *GenerateAccountInput) providerOr(fallback string) string {
 
 func validateLabel(field, value string, maxLength int) error {
 	if n := utf8.RuneCountInString(value); n > maxLength {
-		return fmt.Errorf("%w: %s must be at most %d characters (got %d)", ErrInvalidInput, field, maxLength, n)
+		return invalid("label_too_long", map[string]any{"field": field, "max": maxLength, "got": n},
+			"%s must be at most %d characters (got %d)", field, maxLength, n)
 	}
 	return nil
 }
@@ -161,7 +162,7 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id uuid.UUID, input 
 		updates["note"] = note
 	}
 	if len(updates) == 0 {
-		return nil, fmt.Errorf("%w: provide tag and/or note", ErrInvalidInput)
+		return nil, invalid("tag_or_note_required", nil, "provide tag and/or note")
 	}
 
 	result := s.db.WithContext(ctx).Model(&models.MailAccount{}).Where("id = ?", id).Updates(updates)
@@ -185,7 +186,7 @@ func (s *AccountService) GenerateAccount(ctx context.Context, input GenerateAcco
 	providerName := input.providerOr(settings.DefaultProvider)
 	provider, ok := s.providers[providerName]
 	if !ok {
-		return nil, fmt.Errorf("%w: unknown provider %q", ErrInvalidInput, providerName)
+		return nil, invalid("unknown_provider", map[string]any{"provider": providerName}, "unknown provider %q", providerName)
 	}
 
 	domain := input.Domain
@@ -195,7 +196,8 @@ func (s *AccountService) GenerateAccount(ctx context.Context, input GenerateAcco
 			return nil, fmt.Errorf("failed to list %s domains: %w", providerName, err)
 		}
 		if !slices.Contains(domains, domain) {
-			return nil, fmt.Errorf("%w: %q is not a %s domain", ErrInvalidInput, domain, providerName)
+			return nil, invalid("unknown_domain", map[string]any{"domain": domain, "provider": providerName},
+				"%q is not a %s domain", domain, providerName)
 		}
 	} else {
 		var err error
@@ -483,7 +485,7 @@ func (s *AccountService) UpdateStatus(ctx context.Context, id uuid.UUID, status 
 	switch status {
 	case models.StatusAvailable, models.StatusUsed, models.StatusBlocked:
 	default:
-		return fmt.Errorf("%w: status %q must be one of AVAILABLE, USED, BLOCKED", ErrInvalidInput, status)
+		return invalid("invalid_status", map[string]any{"status": status}, "status %q must be one of AVAILABLE, USED, BLOCKED", status)
 	}
 
 	result := s.db.WithContext(ctx).Model(&models.MailAccount{}).Where("id = ?", id).Update("status", status)

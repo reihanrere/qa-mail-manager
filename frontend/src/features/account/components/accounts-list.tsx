@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Download, Loader2, Plus, RefreshCcw, RefreshCw, Search, Users } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProviderLabel } from '../provider'
@@ -43,6 +44,7 @@ const PAGE_SIZE = 25
  * scrolling table (desktop) or list (mobile) with per-row status/edit/delete.
  */
 export function AccountsList() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
@@ -79,32 +81,32 @@ export function AccountsList() {
     mutationFn: ({ id, status }: { id: string; status: AccountStatus }) =>
       accountApi.updateStatus(id, { status }),
     onSuccess: (_, { status }) => {
-      toast.success(`Status changed to ${ACCOUNT_STATUS_META[status].label}`)
+      toast.success(t('accounts.statusChanged', { status: t(`status.${status}`) }))
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
     },
-    onError: () => toast.error('Failed to update status'),
+    onError: () => toast.error(t('accounts.statusFailed')),
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => accountApi.delete(id),
     onSuccess: () => {
-      toast.success('Account deleted')
+      toast.success(t('accounts.deleted'))
       setPendingDelete(null)
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
     },
-    onError: () => toast.error('Failed to delete account'),
+    onError: () => toast.error(t('accounts.deleteFailed')),
   })
 
   const replaceMutation = useMutation({
     mutationFn: (id: string) => accountApi.replace(id),
     onSuccess: (result) => {
-      toast.success(`Replaced with ${result.account.email}`, {
-        description: 'The old address is now Blocked; its inbox stays readable.',
+      toast.success(t('accounts.replaced', { email: result.account.email }), {
+        description: t('accounts.replacedHint'),
       })
       setPendingReplace(null)
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
     },
-    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to replace account')),
+    onError: (error) => toast.error(apiErrorMessage(error, t('accounts.replaceFailed'))),
   })
 
   const counts = useMemo(() => {
@@ -133,11 +135,9 @@ export function AccountsList() {
     <TooltipProvider delayDuration={200}>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <h2 className="text-2xl font-semibold tracking-tight">Accounts</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">{t('pages.accounts.title')}</h2>
           <p className="text-muted-foreground">
-            {statsQuery.isPending
-              ? 'Loading accounts…'
-              : `${counts.ALL} test account${counts.ALL === 1 ? '' : 's'}`}
+            {statsQuery.isPending ? t('accounts.loading') : t('accounts.count', { count: counts.ALL })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ export function AccountsList() {
             size="icon"
             onClick={refresh}
             disabled={isRefreshing}
-            aria-label="Refresh accounts"
+            aria-label={t('accounts.refresh')}
           >
             <RefreshCw className={cn('size-4', isRefreshing && 'animate-spin')} />
           </Button>
@@ -161,13 +161,13 @@ export function AccountsList() {
               download
             >
               <Download className="size-4" />
-              <span className="hidden sm:inline">Export CSV</span>
+              <span className="hidden sm:inline">{t('accounts.exportCsv')}</span>
             </a>
           </Button>
           <GenerateAccountDialog>
             <Button className="gap-2">
               <Plus className="size-4" />
-              Generate Account
+              {t('accounts.generateAccount')}
             </Button>
           </GenerateAccountDialog>
         </div>
@@ -178,11 +178,11 @@ export function AccountsList() {
           <div className="relative md:max-w-xs md:flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search email, domain, tag or note"
+              placeholder={t('accounts.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pr-8 pl-8"
-              aria-label="Search accounts"
+              aria-label={t('accounts.search')}
             />
             {isFiltering && (
               <Loader2 className="absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
@@ -193,11 +193,11 @@ export function AccountsList() {
               value={providerFilter}
               onValueChange={(value) => setProviderFilter(value as ProviderFilter)}
             >
-              <SelectTrigger size="sm" className="w-44" aria-label="Filter by provider">
+              <SelectTrigger size="sm" className="w-44" aria-label={t('accounts.filterProvider')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All providers</SelectItem>
+                <SelectItem value="ALL">{t('accounts.allProviders')}</SelectItem>
                 {(statsQuery.data?.byProvider ?? []).map(({ provider, count }) => (
                   <SelectItem key={provider} value={provider}>
                     {providerLabel(provider)}
@@ -215,13 +215,17 @@ export function AccountsList() {
                 onClick={() => setLegacyOnly((value) => !value)}
               >
                 <span className="size-1.5 rounded-full bg-amber-500" />
-                Old format
+                {t('accounts.oldFormat')}
                 <span className="text-muted-foreground tabular-nums">{statsQuery.data?.legacy ?? 0}</span>
               </Button>
             )}
           </div>
           <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:ml-auto md:px-0">
-            <div className="flex w-max rounded-lg bg-muted p-1" role="tablist" aria-label="Filter by status">
+            <div
+              className="flex w-max rounded-lg bg-muted p-1"
+              role="tablist"
+              aria-label={t('accounts.filterStatus')}
+            >
               {(['ALL', ...ACCOUNT_STATUSES] as StatusFilter[]).map((value) => (
                 <button
                   key={value}
@@ -239,7 +243,7 @@ export function AccountsList() {
                   {value !== 'ALL' && (
                     <span className={cn('size-1.5 rounded-full', ACCOUNT_STATUS_META[value].dot)} />
                   )}
-                  {value === 'ALL' ? 'All' : ACCOUNT_STATUS_META[value].label}
+                  {value === 'ALL' ? t('accounts.all') : t(`status.${value}`)}
                   <span className="text-muted-foreground tabular-nums">{counts[value]}</span>
                 </button>
               ))}
@@ -255,20 +259,16 @@ export function AccountsList() {
           </div>
         ) : error && !data ? (
           <div className="flex flex-col items-center gap-3 p-10 text-center">
-            <p className="text-sm text-destructive">Failed to load accounts</p>
+            <p className="text-sm text-destructive">{t('accounts.loadFailed')}</p>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
-              Retry
+              {t('common.retry')}
             </Button>
           </div>
         ) : filteredAccounts.length === 0 ? (
           <EmptyState
             icon={Users}
-            title={counts.ALL === 0 ? 'No accounts yet' : 'No accounts found'}
-            description={
-              counts.ALL === 0
-                ? 'Generate your first test account to get started'
-                : 'Try adjusting your search or filters'
-            }
+            title={counts.ALL === 0 ? t('accounts.noAccounts') : t('accounts.notFound')}
+            description={counts.ALL === 0 ? t('accounts.noAccountsHint') : t('accounts.notFoundHint')}
             className="m-4"
           />
         ) : (
@@ -277,12 +277,14 @@ export function AccountsList() {
             <Table className="hidden table-fixed md:table">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-10">Email</TableHead>
-                  <TableHead className="h-10 w-36">Status</TableHead>
-                  <TableHead className="hidden h-10 w-32 lg:table-cell">Tag</TableHead>
-                  <TableHead className="h-10 w-40">Created</TableHead>
+                  <TableHead className="h-10">{t('accounts.columns.email')}</TableHead>
+                  <TableHead className="h-10 w-36">{t('accounts.columns.status')}</TableHead>
+                  <TableHead className="hidden h-10 w-32 lg:table-cell">
+                    {t('accounts.columns.tag')}
+                  </TableHead>
+                  <TableHead className="h-10 w-40">{t('accounts.columns.created')}</TableHead>
                   <TableHead className="h-10 w-40 text-right">
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{t('accounts.columns.actions')}</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -336,7 +338,7 @@ export function AccountsList() {
               hasMore={!!hasNextPage}
               isLoading={isFetchingNextPage}
               onLoadMore={fetchNextPage}
-              endLabel={`Showing all ${matchCount} account${matchCount === 1 ? '' : 's'}`}
+              endLabel={t('accounts.showingAll', { count: matchCount })}
               className="border-t"
             />
           </div>
@@ -351,15 +353,15 @@ export function AccountsList() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Replace this address?</AlertDialogTitle>
+            <AlertDialogTitle>{t('accounts.replaceTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              A new realistic address is generated on the same provider with the same tag and note.{' '}
-              <span className="font-mono break-all text-foreground">{pendingReplace?.email}</span> is marked
-              Blocked so it is not used again; its inbox stays readable.
+              {t('accounts.replaceBefore')}{' '}
+              <span className="font-mono break-all text-foreground">{pendingReplace?.email}</span>{' '}
+              {t('accounts.replaceAfter')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={replaceMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={replaceMutation.isPending}>{t('common.cancel')}</AlertDialogCancel>
             <Button
               disabled={replaceMutation.isPending}
               onClick={() => pendingReplace && replaceMutation.mutate(pendingReplace.id)}
@@ -370,7 +372,7 @@ export function AccountsList() {
               ) : (
                 <RefreshCcw className="size-4" />
               )}
-              Replace
+              {t('accounts.replace')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -382,17 +384,15 @@ export function AccountsList() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this account?</AlertDialogTitle>
+            <AlertDialogTitle>{t('accounts.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-mono break-all text-foreground">{pendingDelete?.email}</span> will be
-              removed from QA Mail Manager.{' '}
-              {pendingDelete?.provider === 'local'
-                ? 'Its stored messages are deleted too, and new mail to this address will be rejected.'
-                : 'The mailbox on Mail.tm is not deleted, but you will no longer be able to read its inbox here.'}
+              <span className="font-mono break-all text-foreground">{pendingDelete?.email}</span>{' '}
+              {t('accounts.deleteAfter')}{' '}
+              {pendingDelete?.provider === 'local' ? t('accounts.deleteLocal') : t('accounts.deleteMailtm')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>{t('common.cancel')}</AlertDialogCancel>
             <Button
               variant="destructive"
               disabled={deleteMutation.isPending}
@@ -400,7 +400,7 @@ export function AccountsList() {
               className="gap-2"
             >
               {deleteMutation.isPending && <Loader2 className="size-4 animate-spin" />}
-              Delete
+              {t('common.delete')}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

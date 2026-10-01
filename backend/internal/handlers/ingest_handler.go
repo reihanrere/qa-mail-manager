@@ -34,22 +34,22 @@ func NewIngestHandler(service *services.AccountService, secret string) *IngestHa
 // 404 tells the Worker to reject mail for unknown addresses; 5xx makes it retry.
 func (h *IngestHandler) Ingest(c fiber.Ctx) error {
 	if len(h.secret) == 0 || subtle.ConstantTimeCompare([]byte(c.Get(HeaderIngestSecret)), h.secret) != 1 {
-		return utils.Error(c, http.StatusUnauthorized, "invalid ingest secret", nil)
+		return utils.Error(c, http.StatusUnauthorized, "invalid_ingest_secret", "invalid ingest secret", nil)
 	}
 	body := c.Body()
 	if len(body) == 0 {
-		return utils.Error(c, http.StatusBadRequest, "empty body", nil)
+		return utils.Error(c, http.StatusBadRequest, "empty_body", "empty body", nil)
 	}
 
 	result, err := h.service.IngestMessage(c.Context(), body, c.Get(HeaderEnvelopeTo))
 	switch {
 	case errors.Is(err, services.ErrRecipientNotFound):
-		return utils.Error(c, http.StatusNotFound, err.Error(), nil)
+		return utils.Error(c, http.StatusNotFound, "recipient_not_found", err.Error(), nil)
 	case errors.Is(err, ingest.ErrMalformed):
-		return utils.Error(c, http.StatusUnprocessableEntity, err.Error(), nil)
+		return utils.Error(c, http.StatusUnprocessableEntity, "malformed_email", err.Error(), nil)
 	case err != nil:
 		log.Printf("ingest: %v", err)
-		return utils.Error(c, http.StatusInternalServerError, "failed to store message", nil)
+		return utils.Error(c, http.StatusInternalServerError, codeInternal, "failed to store message", nil)
 	}
 
 	status := http.StatusCreated

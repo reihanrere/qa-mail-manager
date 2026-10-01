@@ -11,14 +11,14 @@ describe('toDraft', () => {
 describe('fromDraft', () => {
   it.each([
     ['int', '25', { value: 25 }],
-    ['int', '0', { error: 'Enter a whole number greater than 0' }],
-    ['int', '2.5', { error: 'Enter a whole number greater than 0' }],
+    ['int', '0', { error: 'positiveInt' }],
+    ['int', '2.5', { error: 'positiveInt' }],
     ['list', ' budi , ,sari ', { value: ['budi', 'sari'] }],
     ['list', '', { value: [] }],
     ['duration', '720h', { value: '720h' }],
     ['duration', '1h30m', { value: '1h30m' }],
     ['duration', '0s', { value: '0s' }],
-    ['duration', 'soon', { error: 'Use a duration such as 30s, 2m or 720h' }],
+    ['duration', 'soon', { error: 'duration' }],
     ['text', ' ^qa_test_ ', { value: '^qa_test_' }],
   ] as const)('%s %j', (kind, draft, expected) => {
     expect(fromDraft(kind, draft)).toEqual(expected)

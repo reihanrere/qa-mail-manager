@@ -200,3 +200,18 @@ func TestGenerateAccountRejectsUnknownProvider(t *testing.T) {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
 	}
 }
+
+func TestValidationErrorCarriesCode(t *testing.T) {
+	input := GenerateAccountInput{Tag: strings.Repeat("a", testLimits.TagMaxLength+1)}
+	err := input.Validate(testLimits)
+	v, ok := AsValidationError(err)
+	if !ok {
+		t.Fatalf("expected a ValidationError, got %v", err)
+	}
+	if v.Code != "label_too_long" || v.Params["field"] != "tag" || v.Params["max"] != testLimits.TagMaxLength {
+		t.Fatalf("got code %q params %v", v.Code, v.Params)
+	}
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatal("a ValidationError must match ErrInvalidInput")
+	}
+}

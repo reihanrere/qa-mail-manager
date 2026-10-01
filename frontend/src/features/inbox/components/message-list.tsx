@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Loader2, Mail, RefreshCw, Search } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -13,6 +14,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { flattenMessages, useInfiniteMessages } from '@/features/inbox/queries'
 import { getSenderName } from '@/features/inbox/utils/format'
 import type { Message } from '@/types/message'
+import { dateLocale } from '@/i18n'
 
 type MessageFilter = 'all' | 'unread'
 
@@ -24,6 +26,7 @@ interface MessageListProps {
 
 /** Middle inbox pane: newest messages first with search, an Unread filter and infinite scroll. */
 export function MessageList({ accountId, selectedMessageId, onSelectMessage }: MessageListProps) {
+  const { t } = useTranslation()
   const [searchTerm, setSearchTerm] = useState('')
   const [filter, setFilter] = useState<MessageFilter>('all')
 
@@ -51,14 +54,14 @@ export function MessageList({ accountId, selectedMessageId, onSelectMessage }: M
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-[52px] shrink-0 items-center gap-2 px-4">
-        <h2 className="truncate text-lg font-bold">Inbox</h2>
+        <h2 className="truncate text-lg font-bold">{t('inbox.title')}</h2>
         <Button
           variant="ghost"
           size="icon"
           className="size-8 shrink-0"
           onClick={() => refetch()}
           disabled={!accountId || isFetching}
-          aria-label="Refresh messages"
+          aria-label={t('inbox.refresh')}
         >
           <RefreshCw className={cn('size-4', isFetching && 'animate-spin')} />
         </Button>
@@ -77,7 +80,7 @@ export function MessageList({ accountId, selectedMessageId, onSelectMessage }: M
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {value === 'all' ? 'All mail' : 'Unread'}
+              {value === 'all' ? t('inbox.allMail') : t('inbox.unread')}
             </button>
           ))}
         </div>
@@ -89,29 +92,25 @@ export function MessageList({ accountId, selectedMessageId, onSelectMessage }: M
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search"
+            placeholder={t('inbox.search')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pr-8 pl-8"
-            aria-label="Search messages"
+            aria-label={t('inbox.searchMessages')}
             disabled={!accountId}
           />
           {isSearching && (
             <Loader2 className="absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
           )}
         </div>
-        {isTruncated && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Showing matches from the latest 300 messages only.
-          </p>
-        )}
+        {isTruncated && <p className="mt-2 text-xs text-muted-foreground">{t('inbox.truncated')}</p>}
       </div>
 
       {!accountId ? (
         <EmptyState
           icon={Mail}
-          title="Select an account"
-          description="Choose an account to view its inbox"
+          title={t('inbox.selectAccountTitle')}
+          description={t('inbox.selectAccountHint')}
           className="mx-4 mb-4"
         />
       ) : isLoading ? (
@@ -122,21 +121,21 @@ export function MessageList({ accountId, selectedMessageId, onSelectMessage }: M
         </div>
       ) : error && !data ? (
         <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-          <p className="text-sm text-destructive">Failed to load messages</p>
+          <p className="text-sm text-destructive">{t('inbox.loadFailed')}</p>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Retry
+            {t('common.retry')}
           </Button>
         </div>
       ) : filteredMessages.length === 0 && !hasNextPage ? (
         <EmptyState
           icon={Mail}
-          title="No messages found"
+          title={t('inbox.noMessages')}
           description={
             searchTerm
-              ? 'Try adjusting your search'
+              ? t('inbox.adjustSearch')
               : filter === 'unread'
-                ? 'No unread messages'
-                : 'No messages in this inbox yet'
+                ? t('inbox.noUnread')
+                : t('inbox.emptyInbox')
           }
           className="mx-4 mb-4"
         />
@@ -158,7 +157,7 @@ export function MessageList({ accountId, selectedMessageId, onSelectMessage }: M
               hasMore={!!hasNextPage}
               isLoading={isFetchingNextPage}
               onLoadMore={fetchNextPage}
-              endLabel={messages.length > 0 && !search ? 'No older messages' : undefined}
+              endLabel={messages.length > 0 && !search ? t('inbox.noOlder') : undefined}
             />
           </div>
         </ScrollArea>
@@ -174,6 +173,7 @@ interface MessageItemProps {
 }
 
 function MessageItem({ message, isSelected, onClick }: MessageItemProps) {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
@@ -195,10 +195,12 @@ function MessageItem({ message, isSelected, onClick }: MessageItemProps) {
               isSelected ? 'text-foreground' : 'text-muted-foreground',
             )}
           >
-            {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+            {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true, locale: dateLocale() })}
           </time>
         </div>
-        <span className="w-full truncate text-xs font-medium">{message.subject || '(No subject)'}</span>
+        <span className="w-full truncate text-xs font-medium">
+          {message.subject || t('common.noSubject')}
+        </span>
       </div>
       {message.intro && (
         <p className="line-clamp-2 w-full text-xs break-words text-muted-foreground">{message.intro}</p>

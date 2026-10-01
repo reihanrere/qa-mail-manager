@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Copy, ExternalLink, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import type { VerificationLink } from '../utils/links'
 
@@ -13,6 +14,7 @@ export function VerificationLinkCard({
   /** Called when a link is opened or copied (e.g. to mark the account as used) */
   onUsed?: () => void
 }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState<string | null>(null)
 
   const copy = async (url: string) => {
@@ -20,10 +22,10 @@ export function VerificationLinkCard({
       await navigator.clipboard.writeText(url)
       onUsed?.()
       setCopied(url)
-      toast.success('Link copied')
+      toast.success(t('links.copied'))
       setTimeout(() => setCopied(null), 1500)
     } catch {
-      toast.error('Failed to copy link')
+      toast.error(t('links.copyFailed'))
     }
   }
 
@@ -31,7 +33,7 @@ export function VerificationLinkCard({
     <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
       <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
         <Link2 className="size-3.5" />
-        Verification link{links.length > 1 ? 's' : ''}
+        {t('links.title', { count: links.length })}
       </p>
       <ul className="space-y-2">
         {links.map((link) => (
@@ -45,7 +47,7 @@ export function VerificationLinkCard({
             <Button variant="outline" size="sm" className="shrink-0 gap-1.5" asChild>
               <a href={link.url} target="_blank" rel="noreferrer noopener" onClick={onUsed}>
                 <ExternalLink className="size-3.5" />
-                Open
+                {t('common.open')}
               </a>
             </Button>
             <Button
@@ -53,7 +55,7 @@ export function VerificationLinkCard({
               size="icon"
               className="size-8 shrink-0"
               onClick={() => copy(link.url)}
-              aria-label="Copy link"
+              aria-label={t('links.copy')}
             >
               {copied === link.url ? (
                 <Check className="size-3.5 text-emerald-500" />

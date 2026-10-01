@@ -49,34 +49,34 @@ func (s *AccountService) SendingEnabled() bool { return s.mailer.Enabled() }
 // cannot send: their domain is not ours, so mail from it would be spoofed.
 func (s *AccountService) SendMessage(ctx context.Context, id uuid.UUID, input SendMessageInput) (*SendResult, error) {
 	if !s.mailer.Enabled() {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, mailer.ErrDisabled)
+		return nil, invalid("sending_disabled", nil, "%v", mailer.ErrDisabled)
 	}
 	account, err := s.getAccount(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if account.Provider != providers.NameLocal {
-		return nil, fmt.Errorf("%w: only own-domain accounts can send email", ErrInvalidInput)
+		return nil, invalid("send_own_domain_only", nil, "only own-domain accounts can send email")
 	}
 
 	input.Subject = strings.TrimSpace(input.Subject)
 	if len(input.To) == 0 || len(input.To) > maxSendRecipients {
-		return nil, fmt.Errorf("%w: between 1 and %d recipients are required", ErrInvalidInput, maxSendRecipients)
+		return nil, invalid("recipient_count", map[string]any{"max": maxSendRecipients}, "between 1 and %d recipients are required", maxSendRecipients)
 	}
 	for _, to := range input.To {
 		if _, err := mail.ParseAddress(to); err != nil {
-			return nil, fmt.Errorf("%w: invalid recipient %q", ErrInvalidInput, to)
+			return nil, invalid("invalid_recipient", map[string]any{"recipient": to}, "invalid recipient %q", to)
 		}
 	}
 	if utf8.RuneCountInString(input.Subject) > maxSubjectLength || utf8.RuneCountInString(input.Text) > maxBodyLength {
-		return nil, fmt.Errorf("%w: subject or body is too long", ErrInvalidInput)
+		return nil, invalid("message_too_long", nil, "subject or body is too long")
 	}
 
 	var inReplyTo string
 	if input.ReplyTo != "" {
 		messageID, err := uuid.Parse(input.ReplyTo)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid replyTo", ErrInvalidInput)
+			return nil, invalid("invalid_reply_to", nil, "invalid replyTo")
 		}
 		var original models.Message
 		err = s.db.WithContext(ctx).Select("message_id").

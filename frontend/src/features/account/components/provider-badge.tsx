@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import type { MailProviderName } from '@/types/settings'
 import { useProviderLabel } from '../provider'
@@ -22,12 +23,13 @@ export function ProviderBadge({ provider, className }: { provider: MailProviderN
 
 /** Marks an address created with the old, detectable naming scheme. */
 export function LegacyBadge() {
+  const { t } = useTranslation()
   return (
     <span
       className="inline-flex shrink-0 items-center rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
-      title="Created with the old qa_test_ naming that signup forms detect. Replace it with a new address."
+      title={t('accounts.oldFormatHint')}
     >
-      Old format
+      {t('accounts.oldFormat')}
     </span>
   )
 }

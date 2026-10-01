@@ -267,13 +267,21 @@ Paginated endpoints add a `meta` object:
 }
 ```
 
+Errors carry a stable `code` (and `params` for validation errors) so clients can show a
+translated message; `message` stays in English:
+
 ```json
 {
   "success": false,
-  "message": "Error message",
-  "errors": []
+  "message": "invalid input: tag must be at most 50 characters (got 61)",
+  "code": "label_too_long",
+  "params": { "field": "tag", "max": 50, "got": 61 }
 }
 ```
+
+Validation failures use `services.ValidationError` (built with `invalid(code, params, format, ...)`);
+other failures map to `invalid_account_id`, `account_not_found`, `message_not_found`,
+`invalid_request_body`, `upstream_error` (502) or `internal_error`.
 
 ## Example Requests (curl)
 

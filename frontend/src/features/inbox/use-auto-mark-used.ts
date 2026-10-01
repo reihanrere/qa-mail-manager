@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import i18n from '@/i18n'
 import { accountApi } from '@/features/account/api'
 import { accountKeys, useAccount } from '@/features/account/queries'
 import { useAppSettings } from '@/features/settings/queries'
@@ -19,9 +20,9 @@ export function useAutoMarkUsed(accountId: string | undefined) {
     accountApi
       .updateStatus(account.id, { status: 'USED' })
       .then(() => {
-        toast.info('Account marked as Used')
+        toast.info(i18n.t('message.markedUsed'))
         queryClient.invalidateQueries({ queryKey: accountKeys.all })
       })
-      .catch(() => toast.error('Failed to mark the account as Used'))
+      .catch(() => toast.error(i18n.t('message.markUsedFailed')))
   }, [settings, account, queryClient])
 }

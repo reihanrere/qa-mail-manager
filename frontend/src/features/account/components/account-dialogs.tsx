@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,6 +47,7 @@ const charCount = (value: string) => [...value.trim()].length
 
 /** Opens a dialog to create an account on a chosen provider with an optional tag and note. */
 export function GenerateAccountDialog({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   // Bumped after each success so the next open starts with an empty form
   const [formKey, setFormKey] = useState(0)
@@ -68,20 +70,25 @@ export function GenerateAccountDialog({ children }: { children: ReactNode }) {
     onSuccess: (result) => {
       const emails = result.accounts.map((a) => a.email)
       if (emails.length === 1) {
-        toast.success(`Generated ${emails[0]}`)
+        toast.success(t('accountDialog.generated', { email: emails[0] }))
       } else {
-        toast.success(`Generated ${emails.length} accounts`, {
+        toast.success(t('accountDialog.generatedMany', { count: emails.length }), {
           description: emails.slice(0, 3).join(', ') + (emails.length > 3 ? ', …' : ''),
         })
       }
       if (result.error) {
-        toast.warning(`Stopped after ${emails.length} of ${result.requested}`, { description: result.error })
+        toast.warning(
+          t('accountDialog.stoppedAfter', { created: emails.length, requested: result.requested }),
+          {
+            description: result.error,
+          },
+        )
       }
       queryClient.invalidateQueries({ queryKey: accountKeys.all })
       setOpen(false)
       setFormKey((key) => key + 1)
     },
-    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to generate account')),
+    onError: (error) => toast.error(apiErrorMessage(error, t('accountDialog.generateFailed'))),
   })
 
   return (
@@ -96,10 +103,10 @@ export function GenerateAccountDialog({ children }: { children: ReactNode }) {
         if (next) settings.refetch()
       }}
       trigger={children}
-      title="Generate account"
-      description="Creates a new inbox with a realistic-looking address. Tag and note are optional and only stored here."
-      submitLabel="Generate"
-      pendingLabel="Generating…"
+      title={t('accountDialog.generateTitle')}
+      description={t('accountDialog.generateDescription')}
+      submitLabel={t('accountDialog.generate')}
+      pendingLabel={t('accountDialog.generating')}
       mutation={generate}
       limits={settings.data?.limits}
       providers={settings.data?.providers ?? []}
@@ -124,6 +131,7 @@ export function EditAccountDialog({
   account: MailAccount | null
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const settings = useAppSettings()
 
@@ -131,11 +139,11 @@ export function EditAccountDialog({
     mutationFn: (values: LabelsFormValues) =>
       accountApi.update(account!.id, { tag: values.tag.trim(), note: values.note.trim() }),
     onSuccess: () => {
-      toast.success('Account updated')
+      toast.success(t('accountDialog.updated'))
       queryClient.invalidateQueries({ queryKey: accountKeys.all })
       onOpenChange(false)
     },
-    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to update account')),
+    onError: (error) => toast.error(apiErrorMessage(error, t('accountDialog.updateFailed'))),
   })
 
   return (
@@ -144,10 +152,10 @@ export function EditAccountDialog({
       key={account?.id ?? 'none'}
       open={!!account}
       onOpenChange={onOpenChange}
-      title="Edit account"
+      title={t('accountDialog.editTitle')}
       description={<span className="font-mono break-all text-foreground">{account?.email}</span>}
-      submitLabel="Save changes"
-      pendingLabel="Saving…"
+      submitLabel={t('accountDialog.saveChanges')}
+      pendingLabel={t('accountDialog.saving')}
       requireChanges
       mutation={update}
       limits={settings.data?.limits}
@@ -199,6 +207,7 @@ function LabelsDialog({
   providersLoading = false,
   maxCount,
 }: LabelsDialogProps) {
+  const { t } = useTranslation()
   const {
     register,
     handleSubmit,
@@ -239,11 +248,11 @@ function LabelsDialog({
 
           {showProviders && (
             <div className="grid gap-2">
-              <Label htmlFor="account-provider">Provider</Label>
+              <Label htmlFor="account-provider">{t('accountDialog.provider')}</Label>
               <Controller
                 control={control}
                 name="provider"
-                rules={{ required: 'Choose a provider' }}
+                rules={{ required: t('accountDialog.chooseProvider') }}
                 render={({ field }) => (
                   <Select
                     value={field.value ?? ''}
@@ -256,7 +265,11 @@ function LabelsDialog({
                   >
                     <SelectTrigger id="account-provider" className="w-full" aria-invalid={!!errors.provider}>
                       <SelectValue
-                        placeholder={providersLoading ? 'Loading providers…' : 'Choose a provider'}
+                        placeholder={
+                          providersLoading
+                            ? t('accountDialog.loadingProviders')
+                            : t('accountDialog.chooseProvider')
+                        }
                       />
                     </SelectTrigger>
                     <SelectContent>
@@ -264,7 +277,7 @@ function LabelsDialog({
                         <SelectItem key={p.name} value={p.name} disabled={!p.available}>
                           <span>{p.label}</span>
                           <span className="font-mono text-xs text-muted-foreground">
-                            {p.available ? `@${p.domain}` : 'unavailable'}
+                            {p.available ? `@${p.domain}` : t('accountDialog.unavailable')}
                           </span>
                         </SelectItem>
                       ))}
@@ -275,13 +288,12 @@ function LabelsDialog({
               {errors.provider ? (
                 <p className="text-xs text-destructive">{errors.provider.message}</p>
               ) : noUsableProvider ? (
-                <p className="text-xs text-destructive">
-                  No provider can create accounts right now. Check the Settings page for details.
-                </p>
+                <p className="text-xs text-destructive">{t('accountDialog.noProvider')}</p>
               ) : (
                 selectedDomain && (
                   <p className="text-xs text-muted-foreground">
-                    Address will look like <span className="font-mono">name.surname@{selectedDomain}</span>
+                    {t('accountDialog.addressPreview')}{' '}
+                    <span className="font-mono">name.surname@{selectedDomain}</span>
                   </p>
                 )
               )}
@@ -290,7 +302,7 @@ function LabelsDialog({
 
           {showProviders && domainChoices.length > 1 && (
             <div className="grid gap-2">
-              <Label htmlFor="account-domain">Domain</Label>
+              <Label htmlFor="account-domain">{t('accountDialog.domain')}</Label>
               <Controller
                 control={control}
                 name="domain"
@@ -304,7 +316,9 @@ function LabelsDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={RANDOM_DOMAIN}>Random ({domainChoices.length} domains)</SelectItem>
+                      <SelectItem value={RANDOM_DOMAIN}>
+                        {t('accountDialog.randomDomain', { count: domainChoices.length })}
+                      </SelectItem>
                       {domainChoices.map((domain) => (
                         <SelectItem key={domain} value={domain}>
                           <span className="font-mono">@{domain}</span>
@@ -319,7 +333,7 @@ function LabelsDialog({
 
           {maxCount !== undefined && (
             <div className="grid gap-2">
-              <Label htmlFor="account-count">How many</Label>
+              <Label htmlFor="account-count">{t('accountDialog.howMany')}</Label>
               <Input
                 id="account-count"
                 type="number"
@@ -333,7 +347,7 @@ function LabelsDialog({
                     const n = Number(value)
                     return (
                       (Number.isInteger(n) && n >= 1 && n <= maxCount) ||
-                      `Enter a number from 1 to ${maxCount}`
+                      t('accountDialog.countRange', { max: maxCount })
                     )
                   },
                 })}
@@ -342,7 +356,7 @@ function LabelsDialog({
                 <p className="text-xs text-destructive">{errors.count.message}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Up to {maxCount} at once, all with the same tag and note.
+                  {t('accountDialog.countHint', { max: maxCount })}
                 </p>
               )}
             </div>
@@ -350,12 +364,12 @@ function LabelsDialog({
 
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="account-tag">Tag</Label>
+              <Label htmlFor="account-tag">{t('accountDialog.tag')}</Label>
               <CharacterCount length={tagLength} max={limits?.tagMaxLength} />
             </div>
             <Input
               id="account-tag"
-              placeholder="e.g. login-flow"
+              placeholder={t('accountDialog.tagPlaceholder')}
               autoComplete="off"
               aria-invalid={!!errors.tag}
               disabled={mutation.isPending}
@@ -363,26 +377,24 @@ function LabelsDialog({
                 validate: (value) =>
                   !limits ||
                   charCount(value) <= limits.tagMaxLength ||
-                  `Tag must be at most ${limits.tagMaxLength} characters`,
+                  t('accountDialog.tagTooLong', { max: limits.tagMaxLength }),
               })}
             />
             {errors.tag ? (
               <p className="text-xs text-destructive">{errors.tag.message}</p>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Group accounts by feature or test suite; searchable later.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('accountDialog.tagHint')}</p>
             )}
           </div>
 
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="account-note">Note</Label>
+              <Label htmlFor="account-note">{t('accountDialog.note')}</Label>
               <CharacterCount length={noteLength} max={limits?.noteMaxLength} />
             </div>
             <Textarea
               id="account-note"
-              placeholder="What is this account for?"
+              placeholder={t('accountDialog.notePlaceholder')}
               rows={3}
               aria-invalid={!!errors.note}
               disabled={mutation.isPending}
@@ -390,7 +402,7 @@ function LabelsDialog({
                 validate: (value) =>
                   !limits ||
                   charCount(value) <= limits.noteMaxLength ||
-                  `Note must be at most ${limits.noteMaxLength} characters`,
+                  t('accountDialog.noteTooLong', { max: limits.noteMaxLength }),
               })}
             />
             {errors.note && <p className="text-xs text-destructive">{errors.note.message}</p>}
@@ -401,7 +413,7 @@ function LabelsDialog({
               role="alert"
               className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
-              {apiErrorMessage(mutation.error, 'Request failed')}
+              {apiErrorMessage(mutation.error, t('accountDialog.requestFailed'))}
             </p>
           )}
 
@@ -412,7 +424,7 @@ function LabelsDialog({
               onClick={() => handleOpenChange(false)}
               disabled={mutation.isPending}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"

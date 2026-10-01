@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 interface LoadMoreTriggerProps {
@@ -31,6 +32,7 @@ export function LoadMoreTrigger({
   endLabel,
   className,
 }: LoadMoreTriggerProps) {
+  const { t } = useTranslation()
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -56,7 +58,7 @@ export function LoadMoreTrigger({
       {isLoading ? (
         <span className="flex items-center gap-2">
           <Loader2 className="size-3.5 animate-spin" />
-          Loading more…
+          {t('common.loadingMore')}
         </span>
       ) : !hasMore && endLabel ? (
         endLabel

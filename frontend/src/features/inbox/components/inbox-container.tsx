@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronsUpDown, Users } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { useDefaultLayout } from 'react-resizable-panels'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
@@ -80,6 +81,7 @@ function DesktopInbox({
   onSelectAccount,
   onSelectMessage,
 }: InboxViewProps) {
+  const { t } = useTranslation()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'inbox-layout',
@@ -115,7 +117,7 @@ function DesktopInbox({
           className={cn('flex h-[52px] shrink-0 items-center', isCollapsed ? 'justify-center' : 'gap-2 px-4')}
         >
           <Users className="size-4 shrink-0 text-muted-foreground" />
-          {!isCollapsed && <h2 className="truncate text-sm font-semibold">Accounts</h2>}
+          {!isCollapsed && <h2 className="truncate text-sm font-semibold">{t('inbox.accounts')}</h2>}
         </div>
         <Separator />
         <div className="min-h-0 flex-1">
@@ -162,6 +164,7 @@ function MobileInbox({
   onSelectAccount,
   onSelectMessage,
 }: InboxViewProps & { selectedAccountEmail?: string }) {
+  const { t } = useTranslation()
   const [accountSheetOpen, setAccountSheetOpen] = useState(false)
 
   if (selectedAccountId && selectedMessageId) {
@@ -187,14 +190,14 @@ function MobileInbox({
                 {selectedAccountEmail ? getInitials(selectedAccountEmail) : '?'}
               </span>
               <span className="min-w-0 flex-1 truncate text-left font-mono text-xs">
-                {selectedAccountEmail ?? 'Select account'}
+                {selectedAccountEmail ?? t('inbox.selectAccount')}
               </span>
               <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="flex w-80 flex-col gap-0 p-0">
             <SheetHeader className="p-4">
-              <SheetTitle>Accounts</SheetTitle>
+              <SheetTitle>{t('inbox.accounts')}</SheetTitle>
             </SheetHeader>
             <Separator />
             <div className="min-h-0 flex-1">

@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -74,34 +73,38 @@ const (
 func (s Settings) validate() error {
 	switch {
 	case s.Limits.TagMaxLength <= 0 || s.Limits.NoteMaxLength <= 0:
-		return errors.New("tag and note limits must be greater than 0")
+		return mustBePositive("tagMaxLength", "tag and note limits")
 	case s.UsernameMaxAttempts <= 0:
-		return errors.New("username max attempts must be greater than 0")
+		return mustBePositive("usernameMaxAttempts", "username max attempts")
 	case s.BulkGenerateMax <= 0:
-		return errors.New("bulk generate max must be greater than 0")
+		return mustBePositive("bulkGenerateMax", "bulk generate max")
 	case s.InboxSearchMaxPages <= 0:
-		return errors.New("inbox search max pages must be greater than 0")
-	case s.InboxSyncInterval < 0 || s.MailTMRequestDelay < 0 || s.MessageRetention < 0:
-		return errors.New("durations must not be negative")
+		return mustBePositive("inboxSearchMaxPages", "inbox search max pages")
 	case s.MessagePruneInterval <= 0:
-		return errors.New("message prune interval must be greater than 0")
-	case s.AccountCleanupAfter < 0:
-		return errors.New("account cleanup age must not be negative")
+		return mustBePositive("messagePruneInterval", "message prune interval")
+	case s.InboxSyncInterval < 0 || s.MailTMRequestDelay < 0 || s.MessageRetention < 0 || s.AccountCleanupAfter < 0:
+		return invalid("setting_negative_duration", nil, "durations must not be negative")
 	}
 	switch s.AutoMarkUsed {
 	case AutoMarkOff, AutoMarkFirstMessage, AutoMarkOTPCopied:
 	default:
-		return fmt.Errorf("auto mark used must be %s, %s or %s", AutoMarkOff, AutoMarkFirstMessage, AutoMarkOTPCopied)
+		return invalid("invalid_setting_value", map[string]any{"key": "autoMarkUsed"},
+			"auto mark used must be %s, %s or %s", AutoMarkOff, AutoMarkFirstMessage, AutoMarkOTPCopied)
 	}
 	switch s.AccountCleanupAction {
 	case CleanupBlock, CleanupDelete:
 	default:
-		return fmt.Errorf("account cleanup action must be %s or %s", CleanupBlock, CleanupDelete)
+		return invalid("invalid_setting_value", map[string]any{"key": "accountCleanupAction"},
+			"account cleanup action must be %s or %s", CleanupBlock, CleanupDelete)
 	}
 	if _, err := regexp.Compile(s.LegacyUsernamePattern); err != nil {
-		return fmt.Errorf("legacy username pattern: %w", err)
+		return invalid("invalid_pattern", map[string]any{"key": "legacyUsernamePattern"}, "legacy username pattern: %v", err)
 	}
 	return nil
+}
+
+func mustBePositive(key, name string) error {
+	return invalid("setting_not_positive", map[string]any{"key": key}, "%s must be greater than 0", name)
 }
 
 // editableField maps one Settings field to the key used by the API and the overrides table.
@@ -230,7 +233,7 @@ func applyOverrides(base Settings, overrides map[string]string) (Settings, error
 			continue
 		}
 		if err := field.apply(&result, json.RawMessage(value)); err != nil {
-			return base, fmt.Errorf("%w: %s: %v", ErrInvalidInput, key, err)
+			return base, invalid("invalid_setting_value", map[string]any{"key": key}, "%s: %v", key, err)
 		}
 	}
 	return result, nil
@@ -256,10 +259,11 @@ func (s *AccountService) setEffective(settings Settings) {
 
 func (s *AccountService) validateSettings(settings Settings) error {
 	if err := settings.validate(); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		return err
 	}
 	if _, ok := s.providers[settings.DefaultProvider]; !ok {
-		return fmt.Errorf("%w: unknown default mail provider %q", ErrInvalidInput, settings.DefaultProvider)
+		return invalid("unknown_provider", map[string]any{"provider": settings.DefaultProvider},
+			"unknown default mail provider %q", settings.DefaultProvider)
 	}
 	return nil
 }
@@ -306,16 +310,16 @@ type SettingsPatch struct {
 // and applies it immediately.
 func (s *AccountService) UpdateSettings(ctx context.Context, patch SettingsPatch) error {
 	if len(patch.Values) == 0 && len(patch.Reset) == 0 {
-		return fmt.Errorf("%w: nothing to change", ErrInvalidInput)
+		return invalid("nothing_to_change", nil, "nothing to change")
 	}
 	for key := range patch.Values {
 		if _, ok := findField(key); !ok {
-			return fmt.Errorf("%w: %q is not an editable setting", ErrInvalidInput, key)
+			return invalid("unknown_setting", map[string]any{"key": key}, "%q is not an editable setting", key)
 		}
 	}
 	for _, key := range patch.Reset {
 		if _, ok := findField(key); !ok {
-			return fmt.Errorf("%w: %q is not an editable setting", ErrInvalidInput, key)
+			return invalid("unknown_setting", map[string]any{"key": key}, "%q is not an editable setting", key)
 		}
 	}
 

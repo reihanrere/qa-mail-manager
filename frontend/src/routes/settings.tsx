@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Check, Copy, Moon, RefreshCw, RotateCcw, Sun } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { AppHeader } from '@/components/layout/app-header'
@@ -30,6 +31,7 @@ import { useAppSettings } from '@/features/settings/queries'
 import { API_URL } from '@/lib/api-url'
 import { EditableSettingsForm } from '@/features/settings/components/editable-settings-form'
 import { useLiveStore, type LiveStatus } from '@/store/live.store'
+import { LANGUAGES, currentLanguage, dateLocale, setLanguage } from '@/i18n'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -40,46 +42,41 @@ const HEALTH_URL = API_URL ? new URL('/health', API_URL).toString() : ''
 const PANEL_LAYOUT_PREFIX = 'react-resizable-panels:'
 
 function SettingsPage() {
+  const { t } = useTranslation()
   return (
     <>
-      <AppHeader title="Settings" description="Manage your application preferences" />
+      <AppHeader title={t('pages.settings.title')} description={t('pages.settings.description')} />
       <PageContainer className="max-w-5xl">
         <div className="space-y-1">
-          <h2 className="text-2xl font-semibold tracking-tight">Settings</h2>
-          <p className="text-muted-foreground">Preferences are stored in this browser only</p>
+          <h2 className="text-2xl font-semibold tracking-tight">{t('settings.heading')}</h2>
+          <p className="text-muted-foreground">{t('settings.storedLocally')}</p>
         </div>
 
-        <SettingsSection title="Appearance" description="Customize how the application looks">
+        <SettingsSection title={t('settings.appearance')} description={t('settings.appearanceHint')}>
           <AppearanceSettings />
         </SettingsSection>
 
         <Separator />
 
-        <SettingsSection title="Backend Connection" description="The API this app talks to">
+        <SettingsSection title={t('settings.connection')} description={t('settings.connectionHint')}>
           <ConnectionSettings />
         </SettingsSection>
 
         <Separator />
 
-        <SettingsSection
-          title="Mail Providers"
-          description="Read-only. Configured on the server through environment variables (.env)"
-        >
+        <SettingsSection title={t('settings.providers')} description={t('settings.providersHint')}>
           <ProviderSettings />
         </SettingsSection>
 
         <Separator />
 
-        <SettingsSection
-          title="Behavior"
-          description="Saved on the server for everyone. Overrides the .env defaults until reset"
-        >
+        <SettingsSection title={t('settings.behavior')} description={t('settings.behaviorHint')}>
           <BehaviorSettings />
         </SettingsSection>
 
         <Separator />
 
-        <SettingsSection title="Local Data" description="Data saved in this browser">
+        <SettingsSection title={t('settings.localData')} description={t('settings.localDataHint')}>
           <LocalDataSettings />
         </SettingsSection>
       </PageContainer>
@@ -129,12 +126,24 @@ function SettingRow({
   )
 }
 
-const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
+const THEME_OPTIONS: { value: Theme; icon: typeof Sun }[] = [
+  { value: 'light', icon: Sun },
+  { value: 'dark', icon: Moon },
 ]
 
+/** Segmented control styling shared by the theme and language pickers. */
+function segmentClass(selected: boolean) {
+  return cn(
+    'flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors',
+    selected
+      ? 'border-primary bg-primary text-primary-foreground'
+      : 'hover:bg-accent hover:text-accent-foreground',
+  )
+}
+
 function AppearanceSettings() {
+  const { t } = useTranslation()
+  const language = currentLanguage()
   const theme = useThemeStore((state) => state.theme)
   const setTheme = useThemeStore((state) => state.setTheme)
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed)
@@ -144,41 +153,54 @@ function AppearanceSettings() {
 
   return (
     <>
-      <SettingRow label="Theme" description="Choose between light and dark mode">
-        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Theme">
-          {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+      <SettingRow label={t('settings.theme')} description={t('settings.themeHint')}>
+        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t('settings.theme')}>
+          {THEME_OPTIONS.map(({ value, icon: Icon }) => (
             <button
               key={value}
               type="button"
               role="radio"
               aria-checked={theme === value}
               onClick={() => setTheme(value)}
-              className={cn(
-                'flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors',
-                theme === value
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'hover:bg-accent hover:text-accent-foreground',
-              )}
+              className={segmentClass(theme === value)}
             >
               <Icon className="size-4" />
-              {label}
+              {t(`settings.${value}`)}
+            </button>
+          ))}
+        </div>
+      </SettingRow>
+      <Separator />
+      <SettingRow label={t('settings.language')} description={t('settings.languageHint')}>
+        <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t('settings.language')}>
+          {LANGUAGES.map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={language === value}
+              lang={value}
+              onClick={() => setLanguage(value)}
+              className={segmentClass(language === value)}
+            >
+              {t(`language.${value}`)}
             </button>
           ))}
         </div>
       </SettingRow>
       <Separator />
       <SettingRow
-        label="Collapse sidebar"
+        label={t('settings.collapseSidebar')}
         htmlFor="collapse-sidebar"
-        description="Show only icons in the sidebar on larger screens"
+        description={t('settings.collapseSidebarHint')}
       >
         <Switch id="collapse-sidebar" checked={sidebarCollapsed} onCheckedChange={setSidebarCollapsed} />
       </SettingRow>
       <Separator />
       <SettingRow
-        label="New mail notifications"
+        label={t('settings.newMailToasts')}
         htmlFor="new-mail-toasts"
-        description="Show a toast when mail arrives; several emails at once are grouped. Inboxes refresh either way"
+        description={t('settings.newMailToastsHint')}
       >
         <Switch id="new-mail-toasts" checked={newMailToasts} onCheckedChange={setNewMailToasts} />
       </SettingRow>
@@ -187,6 +209,7 @@ function AppearanceSettings() {
 }
 
 function ConnectionSettings() {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const { data, isFetching, isError, dataUpdatedAt, errorUpdatedAt, refetch } = useQuery({
@@ -209,30 +232,29 @@ function ConnectionSettings() {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      toast.error('Failed to copy URL')
+      toast.error(t('settings.copyUrlFailed'))
     }
   }
 
   return (
     <>
       <SettingRow
-        label="API base URL"
+        label={t('settings.apiUrl')}
         description={
           <>
-            Set via <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">VITE_API_URL</code> in{' '}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">frontend/.env</code>. Restart the
-            dev server after changing it.
+            {t('settings.apiUrlHintBefore')} <EnvKey>VITE_API_URL</EnvKey> {t('settings.apiUrlHintIn')}{' '}
+            <EnvKey>frontend/.env</EnvKey>. {t('settings.apiUrlHintAfter')}
           </>
         }
       >
         <div className="flex min-w-0 items-center gap-1 rounded-md border bg-muted/50 py-1 pr-1 pl-3">
-          <span className="truncate font-mono text-sm">{API_URL || 'Not configured'}</span>
+          <span className="truncate font-mono text-sm">{API_URL || t('settings.notConfigured')}</span>
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={handleCopy}
             disabled={!API_URL}
-            aria-label="Copy API URL"
+            aria-label={t('settings.copyApiUrl')}
           >
             {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
           </Button>
@@ -240,11 +262,13 @@ function ConnectionSettings() {
       </SettingRow>
       <Separator />
       <SettingRow
-        label="Status"
+        label={t('settings.status')}
         description={
           lastChecked
-            ? `Last checked at ${format(new Date(lastChecked), 'HH:mm:ss')}`
-            : 'Checks the backend /health endpoint'
+            ? t('settings.lastChecked', {
+                time: format(new Date(lastChecked), 'HH:mm:ss', { locale: dateLocale() }),
+              })
+            : t('settings.healthHint')
         }
       >
         <div className="flex items-center gap-3">
@@ -259,7 +283,11 @@ function ConnectionSettings() {
                     : 'bg-destructive',
               )}
             />
-            {isFetching && !data && !isError ? 'Checking…' : isHealthy ? 'Connected' : 'Unreachable'}
+            {isFetching && !data && !isError
+              ? t('settings.checking')
+              : isHealthy
+                ? t('settings.connected')
+                : t('settings.unreachable')}
           </span>
           <Button
             variant="outline"
@@ -269,7 +297,7 @@ function ConnectionSettings() {
             className="gap-1.5"
           >
             <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
-            Test
+            {t('settings.test')}
           </Button>
         </div>
       </SettingRow>
@@ -278,14 +306,15 @@ function ConnectionSettings() {
 }
 
 function BehaviorSettings() {
+  const { t } = useTranslation()
   const { data, isPending, isError, refetch, isFetching } = useAppSettings()
-  if (isPending) return <p className="p-4 text-sm text-muted-foreground">Loading settings…</p>
+  if (isPending) return <p className="p-4 text-sm text-muted-foreground">{t('settings.loadingSettings')}</p>
   if (isError) {
     return (
       <div className="flex items-center justify-between gap-4 p-4">
-        <p className="text-sm text-destructive">Could not load settings from the backend.</p>
+        <p className="text-sm text-destructive">{t('settings.loadSettingsFailed')}</p>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          Retry
+          {t('common.retry')}
         </Button>
       </div>
     )
@@ -293,19 +322,19 @@ function BehaviorSettings() {
   return <EditableSettingsForm settings={data} />
 }
 
-const LIVE_STATUS_META: Record<LiveStatus, { label: string; dot: string }> = {
-  connected: { label: 'Connected', dot: 'bg-emerald-500' },
-  connecting: { label: 'Connecting…', dot: 'animate-pulse bg-muted-foreground' },
-  disconnected: { label: 'Disconnected', dot: 'bg-destructive' },
+const LIVE_STATUS_DOT: Record<LiveStatus, string> = {
+  connected: 'bg-emerald-500',
+  connecting: 'animate-pulse bg-muted-foreground',
+  disconnected: 'bg-destructive',
 }
 
 function LiveStatusLabel() {
+  const { t } = useTranslation()
   const status = useLiveStore((state) => state.status)
-  const meta = LIVE_STATUS_META[status]
   return (
     <span className="flex items-center gap-2 text-sm font-medium">
-      <span className={cn('size-2 rounded-full', meta.dot)} />
-      {meta.label}
+      <span className={cn('size-2 rounded-full', LIVE_STATUS_DOT[status])} />
+      {t(`settings.${status}`)}
     </span>
   )
 }
@@ -315,17 +344,18 @@ function EnvKey({ children }: { children: ReactNode }) {
 }
 
 function ProviderSettings() {
+  const { t } = useTranslation()
   const { data, isPending, isError, isFetching, refetch } = useAppSettings()
 
   if (isPending) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading settings…</p>
+    return <p className="p-4 text-sm text-muted-foreground">{t('settings.loadingSettings')}</p>
   }
   if (isError) {
     return (
       <div className="flex items-center justify-between gap-4 p-4">
-        <p className="text-sm text-destructive">Could not load settings from the backend.</p>
+        <p className="text-sm text-destructive">{t('settings.loadSettingsFailed')}</p>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-          Retry
+          {t('common.retry')}
         </Button>
       </div>
     )
@@ -340,7 +370,8 @@ function ProviderSettings() {
             description={
               provider.available ? (
                 <>
-                  New addresses use <span className="font-mono whitespace-nowrap">@{provider.domain}</span>
+                  {t('settings.newAddressesUse')}{' '}
+                  <span className="font-mono whitespace-nowrap">@{provider.domain}</span>
                 </>
               ) : (
                 <span className="break-words text-destructive">{provider.error}</span>
@@ -348,7 +379,9 @@ function ProviderSettings() {
             }
           >
             <div className="flex items-center gap-2">
-              {provider.name === data.defaultProvider && <Badge variant="secondary">Default</Badge>}
+              {provider.name === data.defaultProvider && (
+                <Badge variant="secondary">{t('settings.default')}</Badge>
+              )}
               <span className="flex items-center gap-2 text-sm font-medium">
                 <span
                   className={cn(
@@ -356,7 +389,7 @@ function ProviderSettings() {
                     provider.available ? 'bg-emerald-500' : 'bg-destructive',
                   )}
                 />
-                {provider.available ? 'Available' : 'Unavailable'}
+                {provider.available ? t('settings.available') : t('settings.unavailable')}
               </span>
             </div>
           </SettingRow>
@@ -364,21 +397,19 @@ function ProviderSettings() {
         </div>
       ))}
       <SettingRow
-        label="Email ingest"
+        label={t('settings.ingest')}
         description={
           <>
-            Receives mail for the own-domain provider from the Cloudflare Email Worker. Set{' '}
-            <EnvKey>INGEST_SECRET</EnvKey> to enable.
+            {t('settings.ingestHintBefore')} <EnvKey>INGEST_SECRET</EnvKey> {t('settings.ingestHintAfter')}
           </>
         }
       >
-        <span className="text-sm font-medium">{data.inbox.ingestEnabled ? 'Enabled' : 'Disabled'}</span>
+        <span className="text-sm font-medium">
+          {data.inbox.ingestEnabled ? t('settings.enabled') : t('settings.disabled')}
+        </span>
       </SettingRow>
       <Separator />
-      <SettingRow
-        label="Live updates"
-        description="New mail appears instantly through a server-sent events stream; inboxes still poll as a fallback"
-      >
+      <SettingRow label={t('settings.liveUpdates')} description={t('settings.liveUpdatesHint')}>
         <LiveStatusLabel />
       </SettingRow>
     </>
@@ -386,12 +417,14 @@ function ProviderSettings() {
 }
 
 function LocalDataSettings() {
+  const { t } = useTranslation()
   const setTheme = useThemeStore((state) => state.setTheme)
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed)
 
   const handleReset = () => {
     setTheme('dark')
     setSidebarCollapsed(false)
+    setLanguage(null)
     try {
       Object.keys(localStorage)
         .filter((key) => key.startsWith(PANEL_LAYOUT_PREFIX))
@@ -399,32 +432,26 @@ function LocalDataSettings() {
     } catch {
       // Storage may be unavailable (private mode); preferences above are already reset
     }
-    toast.success('Preferences reset to defaults')
+    toast.success(t('settings.resetDone'))
   }
 
   return (
-    <SettingRow
-      label="Reset preferences"
-      description="Restore theme, sidebar and inbox panel sizes to their defaults. Accounts and emails are not affected."
-    >
+    <SettingRow label={t('settings.resetPreferences')} description={t('settings.resetPreferencesHint')}>
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button variant="outline" className="gap-2">
             <RotateCcw className="size-4" />
-            Reset
+            {t('common.reset')}
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset preferences?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Theme, sidebar and inbox layout will go back to their defaults. Your accounts and emails stay as
-              they are.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('settings.resetTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('settings.resetDescription')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReset}>Reset</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReset}>{t('common.reset')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

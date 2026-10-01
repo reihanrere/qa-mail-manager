@@ -1,6 +1,7 @@
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowRight,
   CheckCircle2,
@@ -34,6 +35,7 @@ import {
   ACCOUNT_STATUS_META as STATUS_META,
   type AccountStatus,
 } from '@/features/account/status'
+import { dateLocale } from '@/i18n'
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardPage,
@@ -46,6 +48,7 @@ function percent(part: number, total: number) {
 }
 
 function DashboardPage() {
+  const { t } = useTranslation()
   const statsQuery = useAccountStats()
   const recentQuery = useQuery({
     queryKey: ['accounts', 'recent', RECENT_LIMIT],
@@ -71,28 +74,28 @@ function DashboardPage() {
 
   const stats = [
     {
-      label: 'Total Accounts',
+      label: t('dashboard.totalAccounts'),
       value: total,
       icon: Users,
-      description: `${domains.length} domain${domains.length === 1 ? '' : 's'}`,
+      description: t('dashboard.domainCount', { count: domains.length }),
     },
     {
-      label: 'Available',
+      label: t('status.AVAILABLE'),
       value: counts.AVAILABLE,
       icon: CheckCircle2,
-      description: `${percent(counts.AVAILABLE, total)}% of total`,
+      description: t('dashboard.percentOfTotal', { percent: percent(counts.AVAILABLE, total) }),
     },
     {
-      label: 'Used',
+      label: t('status.USED'),
       value: counts.USED,
       icon: Mail,
-      description: `${percent(counts.USED, total)}% of total`,
+      description: t('dashboard.percentOfTotal', { percent: percent(counts.USED, total) }),
     },
     {
-      label: 'Blocked',
+      label: t('status.BLOCKED'),
       value: counts.BLOCKED,
       icon: ShieldAlert,
-      description: `${percent(counts.BLOCKED, total)}% of total`,
+      description: t('dashboard.percentOfTotal', { percent: percent(counts.BLOCKED, total) }),
     },
   ]
 
@@ -100,20 +103,20 @@ function DashboardPage() {
     <GenerateAccountDialog>
       <Button className="gap-2">
         <UserPlus className="size-4" />
-        Generate Account
+        {t('dashboard.generateAccount')}
       </Button>
     </GenerateAccountDialog>
   )
 
   return (
     <>
-      <AppHeader title="Dashboard" description="Overview of your QA mail accounts" />
+      <AppHeader title={t('pages.dashboard.title')} description={t('pages.dashboard.description')} />
 
       <PageContainer>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0 space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">QA Mail Manager</h2>
-            <p className="text-muted-foreground">Internal Testing Dashboard</p>
+            <h2 className="text-2xl font-semibold tracking-tight">{t('common.appName')}</h2>
+            <p className="text-muted-foreground">{t('dashboard.subtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -121,7 +124,7 @@ function DashboardPage() {
               size="icon"
               onClick={() => refetch()}
               disabled={isRefreshing}
-              aria-label="Refresh data"
+              aria-label={t('dashboard.refresh')}
             >
               <RefreshCw className={cn('size-4', isRefreshing && 'animate-spin')} />
             </Button>
@@ -133,12 +136,12 @@ function DashboardPage() {
           <div className="flex flex-col items-center gap-4">
             <EmptyState
               icon={ShieldAlert}
-              title="Failed to load accounts"
-              description="Make sure the backend API is running, then try again."
+              title={t('dashboard.loadFailed')}
+              description={t('dashboard.loadFailedHint')}
               className="w-full"
             />
             <Button variant="outline" onClick={() => refetch()}>
-              Retry
+              {t('common.retry')}
             </Button>
           </div>
         ) : (
@@ -161,13 +164,13 @@ function DashboardPage() {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <SectionCard
-                title="Recent Accounts"
-                description="Latest generated accounts"
+                title={t('dashboard.recentAccounts')}
+                description={t('dashboard.recentAccountsHint')}
                 className="min-w-0 lg:col-span-2"
                 action={
                   <Button variant="ghost" size="sm" asChild className="shrink-0 gap-1">
                     <Link to="/accounts">
-                      View all
+                      {t('dashboard.viewAll')}
                       <ArrowRight className="size-4" />
                     </Link>
                   </Button>
@@ -182,8 +185,8 @@ function DashboardPage() {
                 ) : recentAccounts.length === 0 ? (
                   <EmptyState
                     icon={Users}
-                    title="No accounts yet"
-                    description="Generate your first test account to get started"
+                    title={t('dashboard.noAccounts')}
+                    description={t('dashboard.noAccountsHint')}
                   />
                 ) : (
                   <ul className="-mx-2 divide-y">
@@ -200,7 +203,10 @@ function DashboardPage() {
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-mono text-sm">{account.email}</p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(account.createdAt), { addSuffix: true })}
+                              {formatDistanceToNow(new Date(account.createdAt), {
+                                addSuffix: true,
+                                locale: dateLocale(),
+                              })}
                               {account.tag && ` · ${account.tag}`}
                             </p>
                           </div>
@@ -208,7 +214,7 @@ function DashboardPage() {
                             variant={STATUS_META[account.status].badge}
                             className="hidden sm:inline-flex"
                           >
-                            {STATUS_META[account.status].label}
+                            {t(`status.${account.status}`)}
                           </Badge>
                           <Inbox className="size-4 shrink-0 text-muted-foreground" />
                         </Link>
@@ -219,7 +225,10 @@ function DashboardPage() {
               </SectionCard>
 
               <div className="flex min-w-0 flex-col gap-4">
-                <SectionCard title="Status Breakdown" description="Account availability for testing">
+                <SectionCard
+                  title={t('dashboard.statusBreakdown')}
+                  description={t('dashboard.statusBreakdownHint')}
+                >
                   {isLoading ? (
                     <Skeleton className="h-24 w-full" />
                   ) : (
@@ -239,7 +248,7 @@ function DashboardPage() {
                         {STATUS_ORDER.map((status) => (
                           <li key={status} className="flex items-center gap-2">
                             <span className={cn('size-2 rounded-full', STATUS_META[status].dot)} />
-                            <span className="flex-1">{STATUS_META[status].label}</span>
+                            <span className="flex-1">{t(`status.${status}`)}</span>
                             <span className="font-medium tabular-nums">{counts[status]}</span>
                             <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
                               {percent(counts[status], total)}%
@@ -249,14 +258,16 @@ function DashboardPage() {
                       </ul>
                       {byProvider.length > 0 && (
                         <div className="space-y-3 border-t pt-4">
-                          <p className="text-xs font-medium text-muted-foreground">Providers</p>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('dashboard.providers')}
+                          </p>
                           <ul className="space-y-3 text-sm">
                             {byProvider.map(({ provider, count, messages }) => (
                               <li key={provider} className="space-y-1.5">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <ProviderBadge provider={provider} />
                                   <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                                    {messages} message{messages === 1 ? '' : 's'}
+                                    {t('dashboard.messageCount', { count: messages })}
                                   </span>
                                   <span className="font-medium tabular-nums">{count}</span>
                                   <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
@@ -266,7 +277,10 @@ function DashboardPage() {
                                 <div
                                   className="h-1.5 overflow-hidden rounded-full bg-muted"
                                   role="img"
-                                  aria-label={`${providerLabel(provider)}: ${percent(count, total)}% of accounts`}
+                                  aria-label={t('dashboard.providerShare', {
+                                    provider: providerLabel(provider),
+                                    percent: percent(count, total),
+                                  })}
                                 >
                                   <div
                                     className={cn(
@@ -283,7 +297,9 @@ function DashboardPage() {
                       )}
                       {domains.length > 0 && (
                         <div className="space-y-2 border-t pt-4">
-                          <p className="text-xs font-medium text-muted-foreground">Domains</p>
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {t('dashboard.domains')}
+                          </p>
                           <ul className="space-y-1.5 text-sm">
                             {domains.map(([domain, count]) => (
                               <li key={domain} className="flex min-w-0 items-center gap-2">
@@ -299,7 +315,7 @@ function DashboardPage() {
                   )}
                 </SectionCard>
 
-                <SectionCard title="Quick Actions">
+                <SectionCard title={t('dashboard.quickActions')}>
                   <div className="grid grid-cols-1 gap-2">
                     {legacyCount > 0 && (
                       <Button
@@ -309,20 +325,20 @@ function DashboardPage() {
                       >
                         <Link to="/accounts">
                           <RefreshCcw className="size-4" />
-                          {legacyCount} old-format address{legacyCount === 1 ? '' : 'es'} to replace
+                          {t('dashboard.legacyToReplace', { count: legacyCount })}
                         </Link>
                       </Button>
                     )}
                     <Button variant="outline" className="justify-start gap-2" asChild>
                       <Link to="/inbox">
                         <Inbox className="size-4" />
-                        Open Inbox
+                        {t('dashboard.openInbox')}
                       </Link>
                     </Button>
                     <Button variant="outline" className="justify-start gap-2" asChild>
                       <Link to="/accounts">
                         <Settings2 className="size-4" />
-                        Manage Accounts
+                        {t('dashboard.manageAccounts')}
                       </Link>
                     </Button>
                   </div>

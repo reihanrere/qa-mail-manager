@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"encoding/csv"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -28,7 +27,8 @@ type BulkGenerateResult struct {
 func (s *AccountService) GenerateAccounts(ctx context.Context, input GenerateAccountInput, count int) (*BulkGenerateResult, error) {
 	settings := s.current()
 	if count < 1 || count > settings.BulkGenerateMax {
-		return nil, fmt.Errorf("%w: count must be between 1 and %d", ErrInvalidInput, settings.BulkGenerateMax)
+		return nil, invalid("bulk_count", map[string]any{"max": settings.BulkGenerateMax},
+			"count must be between 1 and %d", settings.BulkGenerateMax)
 	}
 	if err := input.Validate(settings.Limits); err != nil {
 		return nil, err

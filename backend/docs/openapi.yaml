@@ -772,11 +772,21 @@ components:
           example: false
         message:
           type: string
-        errors:
-          type: array
-          items:
-            type: string
-          nullable: true
+          description: English description, for logs and API clients
+        code:
+          type: string
+          description: >
+            Stable identifier clients translate, e.g. label_too_long, unknown_domain,
+            account_not_found, invalid_request_body, upstream_error, internal_error.
+          example: label_too_long
+        params:
+          type: object
+          additionalProperties: true
+          description: Values for the translation placeholders; only set for validation errors
+          example:
+            field: tag
+            max: 50
+            got: 61
 
     GenerateAccountRequest:
       type: object

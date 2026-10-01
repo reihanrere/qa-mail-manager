@@ -46,7 +46,7 @@ func (h *AccountHandler) Generate(c fiber.Ctx) error {
 	// The body is optional; only parse it when one was sent
 	if len(c.Body()) > 0 {
 		if err := c.Bind().Body(&body); err != nil {
-			return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+			return utils.Error(c, http.StatusBadRequest, codeInvalidBody, "invalid request body", nil)
 		}
 	}
 
@@ -72,7 +72,7 @@ func (h *AccountHandler) Settings(c fiber.Ctx) error {
 func (h *AccountHandler) UpdateSettings(c fiber.Ctx) error {
 	var patch services.SettingsPatch
 	if err := c.Bind().Body(&patch); err != nil {
-		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+		return utils.Error(c, http.StatusBadRequest, codeInvalidBody, "invalid request body", nil)
 	}
 	if err := h.service.UpdateSettings(c.Context(), patch); err != nil {
 		return respondError(c, err, http.StatusInternalServerError)
@@ -104,7 +104,7 @@ type bulkGenerateRequest struct {
 func (h *AccountHandler) GenerateBulk(c fiber.Ctx) error {
 	var body bulkGenerateRequest
 	if err := c.Bind().Body(&body); err != nil {
-		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+		return utils.Error(c, http.StatusBadRequest, codeInvalidBody, "invalid request body", nil)
 	}
 	input := services.GenerateAccountInput{Tag: body.Tag, Note: body.Note, Provider: body.Provider, Domain: body.Domain}
 	result, err := h.service.GenerateAccounts(c.Context(), input, body.Count)
@@ -183,7 +183,7 @@ func (h *AccountHandler) Update(c fiber.Ctx) error {
 
 	var body updateAccountRequest
 	if err := c.Bind().Body(&body); err != nil {
-		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+		return utils.Error(c, http.StatusBadRequest, codeInvalidBody, "invalid request body", nil)
 	}
 
 	input := services.UpdateAccountInput{Tag: body.Tag, Note: body.Note}
@@ -203,7 +203,7 @@ func (h *AccountHandler) UpdateStatus(c fiber.Ctx) error {
 
 	var body updateStatusRequest
 	if err := c.Bind().Body(&body); err != nil {
-		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+		return utils.Error(c, http.StatusBadRequest, codeInvalidBody, "invalid request body", nil)
 	}
 
 	if err := h.service.UpdateStatus(c.Context(), id, body.Status); err != nil {

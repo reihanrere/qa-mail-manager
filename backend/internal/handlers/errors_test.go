@@ -34,3 +34,28 @@ func TestErrorStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorCode(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		status     int
+		wantCode   string
+		wantParams bool
+	}{
+		{"malformed id", errInvalidAccountID, http.StatusBadRequest, codeInvalidAccountID, false},
+		{"uncoded validation", fmt.Errorf("%w: something", services.ErrInvalidInput), http.StatusBadRequest, codeInvalidInput, false},
+		{"unknown account", services.ErrAccountNotFound, http.StatusNotFound, codeAccountNotFound, false},
+		{"message gone", &mailtm.APIError{StatusCode: http.StatusNotFound}, http.StatusNotFound, codeMessageNotFound, false},
+		{"Mail.tm failure", &mailtm.APIError{StatusCode: http.StatusTooManyRequests}, http.StatusBadGateway, codeUpstream, false},
+		{"unexpected", errors.New("boom"), http.StatusInternalServerError, codeInternal, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, params := errorCode(tt.err, tt.status)
+			if code != tt.wantCode || (params != nil) != tt.wantParams {
+				t.Fatalf("errorCode() = %q, %v; want %q", code, params, tt.wantCode)
+			}
+		})
+	}
+}

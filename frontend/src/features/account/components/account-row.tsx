@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { format, formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, Copy, Inbox, Loader2, Pencil, RefreshCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils'
 import { ACCOUNT_STATUSES, ACCOUNT_STATUS_META, type AccountStatus } from '../status'
 import type { MailAccount } from '@/types/account'
 import { LegacyBadge, ProviderBadge } from './provider-badge'
+import { dateLocale } from '@/i18n'
 
 /** Props shared by the per-row controls of the accounts table and mobile list. */
 export interface AccountRowProps {
@@ -32,16 +34,17 @@ export interface AccountRowProps {
 
 /** Monospace email with a copy button, plus the note underneath when present. */
 export function EmailCell({ account }: { account: MailAccount }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(account.email)
       setCopied(true)
-      toast.success('Email copied')
+      toast.success(t('accounts.row.emailCopied'))
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      toast.error('Failed to copy email')
+      toast.error(t('accounts.row.copyFailed'))
     }
   }
 
@@ -68,12 +71,12 @@ export function EmailCell({ account }: { account: MailAccount }) {
             size="icon"
             className="size-7 shrink-0 text-muted-foreground"
             onClick={handleCopy}
-            aria-label="Copy email"
+            aria-label={t('accounts.row.copyEmail')}
           >
             {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Copy email</TooltipContent>
+        <TooltipContent>{t('accounts.row.copyEmail')}</TooltipContent>
       </Tooltip>
     </div>
   )
@@ -81,7 +84,9 @@ export function EmailCell({ account }: { account: MailAccount }) {
 
 /** Status pill that opens a menu to change the account status. */
 export function StatusMenu({ account, isUpdatingStatus, onChangeStatus }: AccountRowProps) {
+  const { t } = useTranslation()
   const meta = ACCOUNT_STATUS_META[account.status]
+  const label = t(`status.${account.status}`)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -90,19 +95,21 @@ export function StatusMenu({ account, isUpdatingStatus, onChangeStatus }: Accoun
           size="sm"
           className="h-7 gap-1.5 px-2 text-xs"
           disabled={isUpdatingStatus}
-          aria-label={`Status: ${meta.label}. Change status`}
+          aria-label={t('accounts.row.statusLabel', { status: label })}
         >
           {isUpdatingStatus ? (
             <Loader2 className="size-3 animate-spin" />
           ) : (
             <span className={cn('size-1.5 rounded-full', meta.dot)} />
           )}
-          {meta.label}
+          {label}
           <ChevronDown className="size-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-40">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Change status</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {t('accounts.row.changeStatus')}
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
           value={account.status}
@@ -113,7 +120,7 @@ export function StatusMenu({ account, isUpdatingStatus, onChangeStatus }: Accoun
           {ACCOUNT_STATUSES.map((status) => (
             <DropdownMenuRadioItem key={status} value={status} className="gap-2">
               <span className={cn('size-1.5 rounded-full', ACCOUNT_STATUS_META[status].dot)} />
-              {ACCOUNT_STATUS_META[status].label}
+              {t(`status.${status}`)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
@@ -134,14 +141,17 @@ export function TagLabel({ tag }: { tag: string }) {
 
 /** Creation date with a relative time; `inline` renders a single muted line for mobile. */
 export function CreatedAt({ date, inline = false }: { date: string; inline?: boolean }) {
+  const { t } = useTranslation()
   const created = new Date(date)
-  const relative = formatDistanceToNow(created, { addSuffix: true })
+  const relative = formatDistanceToNow(created, { addSuffix: true, locale: dateLocale() })
   if (inline) {
-    return <span className="text-xs text-muted-foreground">Created {relative}</span>
+    return (
+      <span className="text-xs text-muted-foreground">{t('accounts.row.createdRelative', { relative })}</span>
+    )
   }
   return (
     <div className="flex flex-col">
-      <span className="text-sm">{format(created, 'MMM d, yyyy')}</span>
+      <span className="text-sm">{format(created, 'PP', { locale: dateLocale() })}</span>
       <span className="text-xs text-muted-foreground">{relative}</span>
     </div>
   )
@@ -149,6 +159,7 @@ export function CreatedAt({ date, inline = false }: { date: string; inline?: boo
 
 /** Edit, open-inbox and delete buttons for one account. */
 export function RowActions({ account, onDelete, onEdit, onReplace }: AccountRowProps) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-end gap-1">
       {account.legacyName && (
@@ -159,12 +170,12 @@ export function RowActions({ account, onDelete, onEdit, onReplace }: AccountRowP
               size="icon"
               className="size-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400"
               onClick={onReplace}
-              aria-label="Replace with a new address"
+              aria-label={t('accounts.row.replace')}
             >
               <RefreshCcw className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Replace with a new address</TooltipContent>
+          <TooltipContent>{t('accounts.row.replace')}</TooltipContent>
         </Tooltip>
       )}
       <Tooltip>
@@ -174,22 +185,22 @@ export function RowActions({ account, onDelete, onEdit, onReplace }: AccountRowP
             size="icon"
             className="size-8"
             onClick={onEdit}
-            aria-label="Edit tag and note"
+            aria-label={t('accounts.row.edit')}
           >
             <Pencil className="size-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Edit tag &amp; note</TooltipContent>
+        <TooltipContent>{t('accounts.row.edit')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="ghost" size="icon" className="size-8" asChild>
-            <Link to="/inbox" search={{ account: account.id }} aria-label="Open inbox">
+            <Link to="/inbox" search={{ account: account.id }} aria-label={t('accounts.row.openInbox')}>
               <Inbox className="size-4" />
             </Link>
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Open inbox</TooltipContent>
+        <TooltipContent>{t('accounts.row.openInbox')}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -198,12 +209,12 @@ export function RowActions({ account, onDelete, onEdit, onReplace }: AccountRowP
             size="icon"
             className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
             onClick={onDelete}
-            aria-label="Delete account"
+            aria-label={t('accounts.row.delete')}
           >
             <Trash2 className="size-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent>Delete account</TooltipContent>
+        <TooltipContent>{t('accounts.row.delete')}</TooltipContent>
       </Tooltip>
     </div>
   )

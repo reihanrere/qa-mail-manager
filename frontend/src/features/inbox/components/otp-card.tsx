@@ -2,6 +2,7 @@ import { Copy, Check, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import type { OTPResult } from '@/types/message'
 
 interface OTPCardProps {
@@ -12,6 +13,7 @@ interface OTPCardProps {
 
 /** Highlights a detected verification code with a copy-to-clipboard button. */
 export function OTPCard({ otp, onCopied }: OTPCardProps) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const [copying, setCopying] = useState(false)
 
@@ -21,10 +23,10 @@ export function OTPCard({ otp, onCopied }: OTPCardProps) {
       await navigator.clipboard.writeText(otp.code)
       onCopied?.()
       setCopied(true)
-      toast.success('OTP copied to clipboard')
+      toast.success(t('otp.copied'))
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error('Failed to copy OTP')
+      toast.error(t('otp.copyFailed'))
     } finally {
       setCopying(false)
     }
@@ -33,7 +35,7 @@ export function OTPCard({ otp, onCopied }: OTPCardProps) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground">Verification code ({otp.length} digits)</p>
+        <p className="text-xs text-muted-foreground">{t('otp.label', { count: otp.length })}</p>
         <p className="truncate font-mono text-2xl font-bold tracking-widest select-all" data-otp-code>
           {otp.code}
         </p>
@@ -44,7 +46,7 @@ export function OTPCard({ otp, onCopied }: OTPCardProps) {
         className="shrink-0"
         onClick={handleCopy}
         disabled={copying}
-        aria-label={copied ? 'Copied' : 'Copy OTP to clipboard'}
+        aria-label={copied ? t('common.copied') : t('otp.copyLabel')}
       >
         {copying ? (
           <Loader2 className="size-4 animate-spin" />
@@ -53,7 +55,7 @@ export function OTPCard({ otp, onCopied }: OTPCardProps) {
         ) : (
           <>
             <Copy className="mr-1 size-4" />
-            Copy
+            {t('common.copy')}
           </>
         )}
       </Button>

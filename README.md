@@ -111,6 +111,7 @@ changed live on the **Settings** page.
 - Fast database search for own-domain inboxes
 - Offline queue in the Email Worker, so mail sent while the laptop is off arrives later
 - Most settings editable live on the **Settings** page, without a restart
+- English and Indonesian interface: follows the browser language, switchable from the header or Settings
 - Sample emails for QA in [`tools/test-emails`](tools/test-emails) (`send.sh` or `gmail-samples.html`)
 
 ## Local development

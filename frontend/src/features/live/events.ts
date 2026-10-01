@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
+import i18n from '@/i18n'
 import { accountKeys } from '@/features/account/queries'
 import { messageKeys } from '@/features/inbox/queries'
 import { settingsKeys } from '@/features/settings/queries'
@@ -39,19 +40,21 @@ export function summarizeNewMail(events: LiveEvent[]): {
   description: string
   accountId?: string
 } {
-  const accounts = [...new Set(events.map((e) => e.accountEmail ?? 'an account'))]
+  const accounts = [...new Set(events.map((e) => e.accountEmail ?? i18n.t('live.anAccount')))]
   if (events.length === 1) {
     return {
-      title: `New email for ${accounts[0]}`,
-      description: events[0].subject || '(No subject)',
+      title: i18n.t('live.newEmailFor', { account: accounts[0] }),
+      description: events[0].subject || i18n.t('common.noSubject'),
       accountId: events[0].accountId,
     }
   }
   const shown = accounts.slice(0, 2).join(', ')
-  const more = accounts.length > 2 ? ` and ${accounts.length - 2} more` : ''
   return {
-    title: `${events.length} new emails`,
-    description: `For ${shown}${more}`,
+    title: i18n.t('live.newEmails', { count: events.length }),
+    description:
+      accounts.length > 2
+        ? i18n.t('live.forAccountsMore', { accounts: shown, count: accounts.length - 2 })
+        : i18n.t('live.forAccounts', { accounts: shown }),
     // Open the inbox of the account only when all mail went to one account
     accountId: accounts.length === 1 ? events[0].accountId : undefined,
   }

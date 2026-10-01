@@ -15,6 +15,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -48,6 +49,7 @@ import { useAutoMarkUsed } from '@/features/inbox/use-auto-mark-used'
 import { useAppSettings } from '@/features/settings/queries'
 import { VerificationLinkCard } from './verification-link-card'
 import { extractVerificationLinks } from '@/features/inbox/utils/links'
+import i18n, { dateLocale } from '@/i18n'
 
 interface MessageDetailProps {
   accountId?: string
@@ -62,6 +64,7 @@ interface MessageDetailProps {
  * message marks it read; the toolbar can reload or delete it.
  */
 export function MessageDetail({ accountId, messageId, onBack, onDeleted }: MessageDetailProps) {
+  const { t } = useTranslation()
   const {
     data: message,
     isLoading,
@@ -95,7 +98,7 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
     <div className="@container flex h-full min-h-0 flex-col">
       <div className="flex h-[52px] shrink-0 items-center gap-2 px-2">
         {onBack && (
-          <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to messages">
+          <Button variant="ghost" size="icon" onClick={onBack} aria-label={t('message.back')}>
             <ArrowLeft className="size-4" />
           </Button>
         )}
@@ -106,12 +109,12 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
               size="icon"
               onClick={() => refetch()}
               disabled={!message || isFetching}
-              aria-label="Reload message"
+              aria-label={t('message.reload')}
             >
               <RefreshCw className={cn('size-4', isFetching && 'animate-spin')} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Reload message</TooltipContent>
+          <TooltipContent>{t('message.reload')}</TooltipContent>
         </Tooltip>
         {accountId && message && message.id === messageId && (
           <>
@@ -121,12 +124,12 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
                   variant="ghost"
                   size="icon"
                   onClick={() => setExpandedId(message.id)}
-                  aria-label="Expand message"
+                  aria-label={t('message.expand')}
                 >
                   <Maximize2 className="size-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Expand message</TooltipContent>
+              <TooltipContent>{t('message.expand')}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -135,13 +138,13 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
                     href={inboxApi.sourceUrl(accountId, message.id)}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label="View source"
+                    aria-label={t('message.viewSource')}
                   >
                     <FileCode className="size-4" />
                   </a>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>View source (raw email and headers)</TooltipContent>
+              <TooltipContent>{t('message.viewSourceHint')}</TooltipContent>
             </Tooltip>
             {canSend && (
               <ComposeDialog
@@ -150,7 +153,7 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
                 defaults={replyDefaults(message)}
                 replyTo={message.id}
               >
-                <Button variant="ghost" size="icon" aria-label="Reply">
+                <Button variant="ghost" size="icon" aria-label={t('message.reply')}>
                   <Reply className="size-4" />
                 </Button>
               </ComposeDialog>
@@ -163,12 +166,12 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
             {markAsRead.isPending ? (
               <>
                 <Loader2 className="size-3.5 animate-spin" />
-                Marking as read…
+                {t('message.markingRead')}
               </>
             ) : message.seen ? (
               <>
                 <CheckCheck className="size-3.5 text-emerald-500" />
-                Read
+                {t('message.read')}
               </>
             ) : null}
           </span>
@@ -181,8 +184,8 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
         <div className="flex flex-1 items-center justify-center p-8">
           <EmptyState
             icon={Mail}
-            title="No message selected"
-            description="Choose a message from the list to view its details"
+            title={t('message.noneSelected')}
+            description={t('message.noneSelectedHint')}
             className="border-none"
           />
         </div>
@@ -202,8 +205,8 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
         <div className="flex flex-1 items-center justify-center p-8">
           <EmptyState
             icon={Mail}
-            title="Failed to load message"
-            description="Unable to load message details"
+            title={t('message.loadFailed')}
+            description={t('message.loadFailedHint')}
             className="border-none"
           />
         </div>
@@ -234,14 +237,15 @@ function ExpandedMessageDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="@container flex h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
         <div className="flex h-[52px] shrink-0 items-center border-b pr-12 pl-4">
           <DialogTitle className="truncate text-sm" title={message.subject}>
-            {message.subject || '(No subject)'}
+            {message.subject || t('common.noSubject')}
           </DialogTitle>
-          <DialogDescription className="sr-only">Full view of the selected message</DialogDescription>
+          <DialogDescription className="sr-only">{t('message.fullView')}</DialogDescription>
         </div>
         <MessageContent accountId={accountId} message={message} />
       </DialogContent>
@@ -258,6 +262,7 @@ function DeleteMessageButton({
   message: MessageData
   onDeleted?: () => void
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const queryClient = useQueryClient()
 
@@ -270,9 +275,9 @@ function DeleteMessageButton({
       removeMessageFromCache(queryClient, accountId, message.id)
       // The backend refreshes the account's message count right after the delete
       setTimeout(() => queryClient.invalidateQueries({ queryKey: accountKeys.all }), 2000)
-      toast.success('Message deleted')
+      toast.success(t('message.deleted'))
     },
-    onError: () => toast.error('Failed to delete message'),
+    onError: () => toast.error(t('message.deleteFailed')),
   })
 
   return (
@@ -284,26 +289,26 @@ function DeleteMessageButton({
               variant="ghost"
               size="icon"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              aria-label="Delete message"
+              aria-label={t('message.delete')}
             >
               <Trash2 className="size-4" />
             </Button>
           </AlertDialogTrigger>
         </TooltipTrigger>
-        <TooltipContent>Delete message</TooltipContent>
+        <TooltipContent>{t('message.delete')}</TooltipContent>
       </Tooltip>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete this message?</AlertDialogTitle>
+          <AlertDialogTitle>{t('message.deleteTitle')}</AlertDialogTitle>
           <AlertDialogDescription>
             <span className="font-medium break-words text-foreground">
-              {message.subject || '(No subject)'}
+              {message.subject || t('common.noSubject')}
             </span>{' '}
-            will be permanently deleted. This cannot be undone.
+            {t('message.deleteAfter')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={deleteMessage.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={deleteMessage.isPending}>{t('common.cancel')}</AlertDialogCancel>
           <Button
             variant="destructive"
             disabled={deleteMessage.isPending}
@@ -311,7 +316,7 @@ function DeleteMessageButton({
             className="gap-2"
           >
             {deleteMessage.isPending && <Loader2 className="size-4 animate-spin" />}
-            Delete
+            {t('common.delete')}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -336,7 +341,7 @@ function useMarkAsRead(accountId: string | undefined) {
     onMutate: (messageId) => setSeen(messageId, true),
     onError: (_, messageId) => {
       setSeen(messageId, false)
-      toast.error('Failed to mark message as read')
+      toast.error(i18n.t('message.markReadFailed'))
     },
   })
 }
@@ -344,6 +349,7 @@ function useMarkAsRead(accountId: string | undefined) {
 type MessageData = Awaited<ReturnType<typeof inboxApi.getMessage>>
 
 function MessageContent({ accountId, message }: { accountId: string; message: MessageData }) {
+  const { t } = useTranslation()
   const otp = extractOTPFromMessage(message)
   const links = extractVerificationLinks(message)
   const markUsed = useAutoMarkUsed(accountId)
@@ -371,10 +377,10 @@ function MessageContent({ accountId, message }: { accountId: string; message: Me
             )}
           </div>
           <div className="truncate text-xs font-medium" title={message.subject}>
-            {message.subject || '(No subject)'}
+            {message.subject || t('common.noSubject')}
           </div>
           <div className="truncate text-xs" title={toLabels}>
-            <span className="font-medium">To:</span>{' '}
+            <span className="font-medium">{t('message.to')}</span>{' '}
             <span className="font-mono text-muted-foreground">{toLabels || '-'}</span>
           </div>
         </div>
@@ -382,7 +388,7 @@ function MessageContent({ accountId, message }: { accountId: string; message: Me
           dateTime={message.createdAt}
           className="hidden shrink-0 text-xs text-muted-foreground @md:block"
         >
-          {format(new Date(message.createdAt), 'PPp')}
+          {format(new Date(message.createdAt), 'PPp', { locale: dateLocale() })}
         </time>
       </div>
 
@@ -408,7 +414,7 @@ function MessageContent({ accountId, message }: { accountId: string; message: Me
         <div className="flex min-h-0 flex-1 flex-col p-4">
           {/* Sandboxed so the email's own styles and scripts cannot affect the app */}
           <iframe
-            title="Message content"
+            title={t('message.content')}
             sandbox="allow-popups allow-popups-to-escape-sandbox"
             srcDoc={`<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>body{margin:16px;font-family:system-ui,sans-serif;font-size:14px;line-height:1.5;color:#111;word-break:break-word}img{max-width:100%;height:auto}</style></head><body>${html}</body></html>`}
             className="min-h-40 w-full flex-1 rounded-md border bg-white"
@@ -417,9 +423,7 @@ function MessageContent({ accountId, message }: { accountId: string; message: Me
       ) : (
         <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
           <div className="p-4 text-sm break-words whitespace-pre-wrap">
-            {message.text || (
-              <span className="text-muted-foreground">This message has no readable content</span>
-            )}
+            {message.text || <span className="text-muted-foreground">{t('message.noContent')}</span>}
           </div>
         </ScrollArea>
       )}
@@ -437,11 +441,12 @@ function AttachmentList({
   messageId: string
   attachments: MessageAttachment[]
 }) {
+  const { t } = useTranslation()
   return (
     <div className="shrink-0 px-4 pt-4">
       <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <Paperclip className="size-3.5" />
-        {attachments.length} attachment{attachments.length === 1 ? '' : 's'}
+        {t('message.attachments', { count: attachments.length })}
       </p>
       <ul className="flex flex-wrap gap-2">
         {attachments.map((attachment) => (
@@ -464,7 +469,7 @@ function AttachmentList({
             <a
               href={inboxApi.attachmentUrl(accountId, messageId, attachment.id, true)}
               className="flex shrink-0 items-center px-2 py-1.5 text-muted-foreground hover:text-foreground"
-              aria-label={`Download ${attachment.filename}`}
+              aria-label={t('message.download', { filename: attachment.filename })}
             >
               <Download className="size-3.5" />
             </a>

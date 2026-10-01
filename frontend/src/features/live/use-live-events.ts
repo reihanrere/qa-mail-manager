@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
+import i18n from '@/i18n'
 import { apiUrl, API_URL } from '@/lib/api-url'
 import { useAppStore } from '@/store/app.store'
 import { useLiveStore } from '@/store/live.store'
@@ -53,7 +54,7 @@ export function useLiveEvents() {
         id: 'new-mail',
         description,
         action: {
-          label: 'Open',
+          label: i18n.t('common.open'),
           onClick: () => navigate({ to: '/inbox', search: accountId ? { account: accountId } : {} }),
         },
       })

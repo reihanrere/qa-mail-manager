@@ -30,9 +30,43 @@ func errorStatus(err error, fallback int) int {
 	}
 }
 
+// Error codes for failures that are not a services.ValidationError.
+const (
+	codeInvalidBody      = "invalid_request_body"
+	codeInvalidAccountID = "invalid_account_id"
+	codeInvalidInput     = "invalid_input"
+	codeAccountNotFound  = "account_not_found"
+	codeMessageNotFound  = "message_not_found"
+	codeUpstream         = "upstream_error"
+	codeInternal         = "internal_error"
+)
+
+// errorCode picks the code clients translate; params are only set for validation errors.
+func errorCode(err error, status int) (string, map[string]any) {
+	if v, ok := services.AsValidationError(err); ok {
+		return v.Code, v.Params
+	}
+	switch {
+	case errors.Is(err, errInvalidAccountID):
+		return codeInvalidAccountID, nil
+	case errors.Is(err, services.ErrInvalidInput):
+		return codeInvalidInput, nil
+	case errors.Is(err, services.ErrAccountNotFound):
+		return codeAccountNotFound, nil
+	case status == http.StatusNotFound:
+		return codeMessageNotFound, nil
+	case status == http.StatusBadGateway:
+		return codeUpstream, nil
+	default:
+		return codeInternal, nil
+	}
+}
+
 // respondError writes the error envelope with the status chosen by errorStatus.
 func respondError(c fiber.Ctx, err error, fallback int) error {
-	return utils.Error(c, errorStatus(err, fallback), err.Error(), nil)
+	status := errorStatus(err, fallback)
+	code, params := errorCode(err, status)
+	return utils.Error(c, status, code, err.Error(), params)
 }
 
 // errInvalidAccountID is returned by parseAccountID for a malformed :id parameter.

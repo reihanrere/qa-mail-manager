@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Loader2, Search } from 'lucide-react'
 import { formatDistanceToNowStrict } from 'date-fns'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -14,6 +16,7 @@ import { ACCOUNT_STATUS_META } from '@/features/account/status'
 import { INBOX_ACCOUNT_PARAMS } from '@/features/inbox/queries'
 import { getInitials } from '@/features/inbox/utils/format'
 import type { MailAccount } from '@/types/account'
+import { dateLocale } from '@/i18n'
 
 // The backend's inbox sync refreshes lastMessageAt every couple of minutes
 const ACCOUNTS_REFETCH_INTERVAL = 60_000
@@ -29,6 +32,7 @@ interface AccountListProps {
  * With `isCollapsed` it shows only initials (with tooltips) for the narrow pane.
  */
 export function AccountList({ selectedAccountId, onSelectAccount, isCollapsed = false }: AccountListProps) {
+  const { t } = useTranslation()
   const [searchTerm, setSearchTerm] = useState('')
   const search = useDebouncedValue(searchTerm.trim(), 300)
 
@@ -63,9 +67,9 @@ export function AccountList({ selectedAccountId, onSelectAccount, isCollapsed = 
   if (error && !data) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
-        {!isCollapsed && <p className="text-sm text-destructive">Failed to load accounts</p>}
+        {!isCollapsed && <p className="text-sm text-destructive">{t('inbox.accountsLoadFailed')}</p>}
         <Button variant="outline" size="sm" onClick={() => refetch()}>
-          Retry
+          {t('common.retry')}
         </Button>
       </div>
     )
@@ -112,7 +116,7 @@ export function AccountList({ selectedAccountId, onSelectAccount, isCollapsed = 
                 </TooltipTrigger>
                 <TooltipContent side="right" className="flex flex-col gap-0.5">
                   <span className="font-mono">{account.email}</span>
-                  <span className="text-muted-foreground">{activityLabel(account)}</span>
+                  <span className="text-muted-foreground">{activityLabel(account, t)}</span>
                 </TooltipContent>
               </Tooltip>
             )
@@ -129,11 +133,11 @@ export function AccountList({ selectedAccountId, onSelectAccount, isCollapsed = 
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search accounts"
+            placeholder={t('inbox.searchAccounts')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pr-8 pl-8"
-            aria-label="Search accounts"
+            aria-label={t('inbox.searchAccounts')}
           />
           {isSearching && (
             <Loader2 className="absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
@@ -145,7 +149,7 @@ export function AccountList({ selectedAccountId, onSelectAccount, isCollapsed = 
       <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:!block">
         {accounts.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            {search ? 'No accounts found' : 'No accounts yet'}
+            {search ? t('inbox.noAccountsFound') : t('inbox.noAccounts')}
           </p>
         ) : (
           <nav
@@ -167,10 +171,14 @@ export function AccountList({ selectedAccountId, onSelectAccount, isCollapsed = 
   )
 }
 
-function activityLabel(account: MailAccount) {
-  if (!account.lastMessageAt) return 'No messages yet'
-  const count = `${account.messageCount} message${account.messageCount === 1 ? '' : 's'}`
-  return `${count} · ${formatDistanceToNowStrict(new Date(account.lastMessageAt), { addSuffix: true })}`
+function activityLabel(account: MailAccount, t: TFunction) {
+  if (!account.lastMessageAt) return t('inbox.noMessagesYet')
+  const count = t('dashboard.messageCount', { count: account.messageCount })
+  const ago = formatDistanceToNowStrict(new Date(account.lastMessageAt), {
+    addSuffix: true,
+    locale: dateLocale(),
+  })
+  return `${count} · ${ago}`
 }
 
 interface AccountItemProps {
@@ -180,6 +188,7 @@ interface AccountItemProps {
 }
 
 function AccountItem({ account, isSelected, onClick }: AccountItemProps) {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
@@ -214,7 +223,7 @@ function AccountItem({ account, isSelected, onClick }: AccountItemProps) {
             isSelected ? 'text-primary-foreground/70' : 'text-muted-foreground',
           )}
         >
-          {activityLabel(account)}
+          {activityLabel(account, t)}
         </span>
       </span>
     </button>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Loader2, RotateCcw, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +12,7 @@ import { apiErrorMessage } from '@/lib/api-error'
 import { cn } from '@/lib/utils'
 import { settingsApi } from '../api'
 import { settingsKeys } from '../queries'
-import { FIELD_GROUPS, fromDraft, isChanged, toDraft, type FieldDef } from '../fields'
+import { FIELD_GROUPS, fromDraft, isChanged, toDraft, type DraftError, type FieldDef } from '../fields'
 import type { AppSettings, EditableSettingKey, EditableSettings, SettingsPatch } from '@/types/settings'
 
 type Drafts = Record<EditableSettingKey, string>
@@ -27,6 +28,7 @@ const ALL_FIELDS = FIELD_GROUPS.flatMap((group) => group.fields)
  * environment defaults (shown under each field) until reset; they apply immediately.
  */
 export function EditableSettingsForm({ settings }: { settings: AppSettings }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [drafts, setDrafts] = useState<Drafts>(() => draftsFrom(settings.editable))
   // Re-sync the form when the saved settings change (save, reset, or another tab)
@@ -40,12 +42,12 @@ export function EditableSettingsForm({ settings }: { settings: AppSettings }) {
     mutationFn: (patch: SettingsPatch) => settingsApi.update(patch),
     onSuccess: (updated, patch) => {
       queryClient.setQueryData(settingsKeys.all, updated)
-      toast.success(patch.reset?.length ? 'Setting reset to its default' : 'Settings saved')
+      toast.success(patch.reset?.length ? t('settingsForm.resetToDefault') : t('settingsForm.saved'))
     },
-    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to save settings')),
+    onError: (error) => toast.error(apiErrorMessage(error, t('settingsForm.saveFailed'))),
   })
 
-  const errors: Partial<Record<EditableSettingKey, string>> = {}
+  const errors: Partial<Record<EditableSettingKey, DraftError>> = {}
   const changed: Partial<EditableSettings> = {}
   for (const field of ALL_FIELDS) {
     const draft = drafts[field.key]
@@ -68,10 +70,10 @@ export function EditableSettingsForm({ settings }: { settings: AppSettings }) {
       }}
     >
       {FIELD_GROUPS.map((group, index) => (
-        <div key={group.title}>
+        <div key={group.id}>
           {index > 0 && <Separator />}
           <p className="px-4 pt-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            {group.title}
+            {t(`settingsGroups.${group.id}`)}
           </p>
           {group.fields.map((field) => (
             <SettingField
@@ -79,7 +81,7 @@ export function EditableSettingsForm({ settings }: { settings: AppSettings }) {
               field={field}
               settings={settings}
               draft={drafts[field.key]}
-              error={errors[field.key]}
+              error={errors[field.key] && t(`settingsForm.errors.${errors[field.key]!}`)}
               dirty={field.key in changed || field.key in errors}
               disabled={save.isPending}
               onChange={(value) => setDraft(field.key, value)}
@@ -92,8 +94,8 @@ export function EditableSettingsForm({ settings }: { settings: AppSettings }) {
       <div className="flex flex-wrap items-center justify-end gap-2 p-4">
         <span className="mr-auto text-xs text-muted-foreground">
           {changedCount > 0
-            ? `${changedCount} unsaved change${changedCount === 1 ? '' : 's'}`
-            : 'Changes apply immediately, no restart needed'}
+            ? t('settingsForm.unsaved', { count: changedCount })
+            : t('settingsForm.applyImmediately')}
         </span>
         <Button
           type="button"
@@ -101,11 +103,11 @@ export function EditableSettingsForm({ settings }: { settings: AppSettings }) {
           disabled={changedCount === 0 || save.isPending}
           onClick={() => setDrafts(draftsFrom(settings.editable))}
         >
-          Discard
+          {t('settingsForm.discard')}
         </Button>
         <Button type="submit" disabled={changedCount === 0 || hasErrors || save.isPending} className="gap-2">
           {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          Save
+          {t('common.save')}
         </Button>
       </div>
     </form>
@@ -131,29 +133,33 @@ function SettingField({
   onChange: (value: string) => void
   onReset: () => void
 }) {
+  const { t } = useTranslation()
   const id = `setting-${field.key}`
   const overridden = settings.overridden.includes(field.key)
-  const defaultLabel = toDraft(settings.defaults[field.key]) || 'empty'
+  const defaultLabel = toDraft(settings.defaults[field.key]) || t('settingsForm.empty')
   const options =
     field.kind === 'provider'
       ? settings.providers.map((provider) => ({ value: provider.name, label: provider.label }))
-      : field.options
+      : field.options?.map((value) => ({
+          value,
+          label: (t as (key: string) => string)(`settingsOptions.${field.key}.${value}`),
+        }))
 
   return (
     <div className="grid gap-2 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-start sm:gap-6">
       <div className="min-w-0 space-y-1">
         <div className="flex items-center gap-2">
-          <Label htmlFor={id}>{field.label}</Label>
+          <Label htmlFor={id}>{t(`settingsFields.${field.key}.label`)}</Label>
           {overridden && (
             <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-              Customized
+              {t('settingsForm.customized')}
             </span>
           )}
         </div>
-        <p className="text-sm text-muted-foreground">{field.description}</p>
+        <p className="text-sm text-muted-foreground">{t(`settingsFields.${field.key}.description`)}</p>
         <p className="text-xs text-muted-foreground">
-          Default from <code className="rounded bg-muted px-1 font-mono">{field.env}</code>:{' '}
-          <span className="font-mono break-all">{defaultLabel}</span>
+          {t('settingsForm.defaultFrom')} <code className="rounded bg-muted px-1 font-mono">{field.env}</code>
+          : <span className="font-mono break-all">{defaultLabel}</span>
         </p>
       </div>
       <div className="min-w-0 space-y-1.5">
@@ -194,7 +200,7 @@ function SettingField({
             disabled={disabled}
           >
             <RotateCcw className="size-3" />
-            Reset to default
+            {t('settingsForm.resetField')}
           </Button>
         )}
       </div>

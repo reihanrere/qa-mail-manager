@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Loader2, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -38,6 +39,7 @@ export function ComposeDialog({
   replyTo?: string
   children: ReactNode
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const {
     register,
@@ -55,11 +57,11 @@ export function ComposeDialog({
         replyTo,
       }),
     onSuccess: (result) => {
-      toast.success(`Sent to ${result.to.join(', ')}`)
+      toast.success(t('compose.sent', { recipients: result.to.join(', ') }))
       setOpen(false)
       reset(defaults)
     },
-    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to send email')),
+    onError: (error) => toast.error(apiErrorMessage(error, t('compose.sendFailed'))),
   })
 
   return (
@@ -75,13 +77,13 @@ export function ComposeDialog({
       <DialogContent className="sm:max-w-lg" showCloseButton={!send.isPending}>
         <form onSubmit={handleSubmit((values) => send.mutate(values))} className="grid gap-4" noValidate>
           <DialogHeader>
-            <DialogTitle>{replyTo ? 'Reply' : 'New email'}</DialogTitle>
+            <DialogTitle>{replyTo ? t('compose.reply') : t('compose.newEmail')}</DialogTitle>
             <DialogDescription>
-              From <span className="font-mono text-foreground">{from}</span>
+              {t('compose.from')} <span className="font-mono text-foreground">{from}</span>
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            <Label htmlFor="compose-to">To</Label>
+            <Label htmlFor="compose-to">{t('compose.to')}</Label>
             <Input
               id="compose-to"
               autoComplete="off"
@@ -90,15 +92,17 @@ export function ComposeDialog({
               {...register('to', {
                 validate: (value) => {
                   const list = parseRecipients(value)
-                  if (list.length === 0) return 'Add at least one recipient'
-                  return list.every((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) || 'Check the addresses'
+                  if (list.length === 0) return t('compose.recipientRequired')
+                  return (
+                    list.every((a) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) || t('compose.checkAddresses')
+                  )
                 },
               })}
             />
             {errors.to && <p className="text-xs text-destructive">{errors.to.message}</p>}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="compose-subject">Subject</Label>
+            <Label htmlFor="compose-subject">{t('compose.subject')}</Label>
             <Input
               id="compose-subject"
               autoComplete="off"
@@ -107,16 +111,16 @@ export function ComposeDialog({
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="compose-text">Message</Label>
+            <Label htmlFor="compose-text">{t('compose.message')}</Label>
             <Textarea id="compose-text" rows={8} disabled={send.isPending} {...register('text')} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={send.isPending}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" className="gap-2" disabled={send.isPending}>
               {send.isPending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-              Send
+              {t('compose.send')}
             </Button>
           </DialogFooter>
         </form>

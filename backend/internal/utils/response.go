@@ -4,11 +4,13 @@ import "github.com/gofiber/fiber/v3"
 
 // response is the consistent JSON envelope returned by every endpoint.
 type response struct {
-	Success bool     `json:"success"`
-	Message string   `json:"message"`
-	Data    any      `json:"data,omitempty"`
-	Meta    any      `json:"meta,omitempty"`
-	Errors  []string `json:"errors,omitempty"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
+	Meta    any    `json:"meta,omitempty"`
+	// Code and Params let clients show a translated message instead of Message.
+	Code   string         `json:"code,omitempty"`
+	Params map[string]any `json:"params,omitempty"`
 }
 
 // Success writes a 200-family success envelope.
@@ -30,11 +32,13 @@ func SuccessWithMeta(c fiber.Ctx, status int, message string, data any, meta any
 	})
 }
 
-// Error writes a failure envelope with the given HTTP status.
-func Error(c fiber.Ctx, status int, message string, errs []string) error {
+// Error writes a failure envelope with the given HTTP status. code is a stable
+// snake_case identifier; params fill the placeholders of its translation.
+func Error(c fiber.Ctx, status int, code, message string, params map[string]any) error {
 	return c.Status(status).JSON(response{
 		Success: false,
 		Message: message,
-		Errors:  errs,
+		Code:    code,
+		Params:  params,
 	})
 }

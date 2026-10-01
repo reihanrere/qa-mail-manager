@@ -5,12 +5,12 @@ export type { AccountStatus }
 /** Statuses in display order. */
 export const ACCOUNT_STATUSES: AccountStatus[] = ['AVAILABLE', 'USED', 'BLOCKED']
 
-/** Label, status-dot colour and badge variant per status, shared by every page. */
+/** Status-dot colour and badge variant per status; labels are `status.<STATUS>` translations. */
 export const ACCOUNT_STATUS_META: Record<
   AccountStatus,
-  { label: string; dot: string; badge: 'default' | 'secondary' | 'destructive' }
+  { dot: string; badge: 'default' | 'secondary' | 'destructive' }
 > = {
-  AVAILABLE: { label: 'Available', dot: 'bg-emerald-500', badge: 'default' },
-  USED: { label: 'Used', dot: 'bg-amber-500', badge: 'secondary' },
-  BLOCKED: { label: 'Blocked', dot: 'bg-destructive', badge: 'destructive' },
+  AVAILABLE: { dot: 'bg-emerald-500', badge: 'default' },
+  USED: { dot: 'bg-amber-500', badge: 'secondary' },
+  BLOCKED: { dot: 'bg-destructive', badge: 'destructive' },
 }
