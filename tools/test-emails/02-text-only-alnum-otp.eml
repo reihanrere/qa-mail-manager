@@ -1,0 +1,21 @@
+From: GitHub <noreply@github-test.example>
+To: {{TO}}
+Subject: Your sign-in verification code
+Message-ID: <{{ID}}-text-only@github-test.example>
+Date: {{DATE}}
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hey there!
+
+Your verification code is: A7K9Q2
+
+This message has NO HTML part, so the app must show this plain text
+with line breaks preserved:
+    - indented line 1
+    - indented line 2
+
+A very long line without breaks to test wrapping: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+Thanks,
+The GitHub Team

@@ -55,6 +55,17 @@ func (s *Service) FetchMessageDetail(ctx context.Context, address, password, mes
 	return detail, err
 }
 
+// Download fetches a binary resource (attachment or raw source) with the account's token.
+func (s *Service) Download(ctx context.Context, address, password, path string) ([]byte, error) {
+	var body []byte
+	err := s.WithToken(ctx, address, password, func(token string) error {
+		var err error
+		body, err = s.client.Download(ctx, token, path)
+		return err
+	})
+	return body, err
+}
+
 // MarkMessageSeen marks a single message as read.
 func (s *Service) MarkMessageSeen(ctx context.Context, address, password, messageID string) error {
 	return s.WithToken(ctx, address, password, func(token string) error {

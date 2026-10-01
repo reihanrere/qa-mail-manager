@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { Check, Copy, Moon, RefreshCw, RotateCcw, Sun } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { AppHeader } from '@/components/layout/app-header'
 import { PageContainer } from '@/components/common/page-container'
 import { Button } from '@/components/ui/button'
@@ -25,15 +26,15 @@ import {
 import { cn } from '@/lib/utils'
 import { useThemeStore, type Theme } from '@/store/theme.store'
 import { useAppStore } from '@/store/app.store'
+import { useAppSettings } from '@/features/settings/queries'
+import { API_URL } from '@/lib/api-url'
+import { EditableSettingsForm } from '@/features/settings/components/editable-settings-form'
+import { useLiveStore, type LiveStatus } from '@/store/live.store'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
-// VITE_API_URL may be relative ("/api" behind the Docker nginx proxy), so resolve it against the page
-const API_URL: string = import.meta.env.VITE_API_URL
-  ? new URL(import.meta.env.VITE_API_URL, window.location.origin).toString().replace(/\/$/, '')
-  : ''
 // /health lives at the server root, not under the /api prefix
 const HEALTH_URL = API_URL ? new URL('/health', API_URL).toString() : ''
 const PANEL_LAYOUT_PREFIX = 'react-resizable-panels:'
@@ -56,6 +57,24 @@ function SettingsPage() {
 
         <SettingsSection title="Backend Connection" description="The API this app talks to">
           <ConnectionSettings />
+        </SettingsSection>
+
+        <Separator />
+
+        <SettingsSection
+          title="Mail Providers"
+          description="Read-only. Configured on the server through environment variables (.env)"
+        >
+          <ProviderSettings />
+        </SettingsSection>
+
+        <Separator />
+
+        <SettingsSection
+          title="Behavior"
+          description="Saved on the server for everyone. Overrides the .env defaults until reset"
+        >
+          <BehaviorSettings />
         </SettingsSection>
 
         <Separator />
@@ -244,9 +263,113 @@ function ConnectionSettings() {
           </Button>
         </div>
       </SettingRow>
+    </>
+  )
+}
+
+function BehaviorSettings() {
+  const { data, isPending, isError, refetch, isFetching } = useAppSettings()
+  if (isPending) return <p className="p-4 text-sm text-muted-foreground">Loading settings…</p>
+  if (isError) {
+    return (
+      <div className="flex items-center justify-between gap-4 p-4">
+        <p className="text-sm text-destructive">Could not load settings from the backend.</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          Retry
+        </Button>
+      </div>
+    )
+  }
+  return <EditableSettingsForm settings={data} />
+}
+
+const LIVE_STATUS_META: Record<LiveStatus, { label: string; dot: string }> = {
+  connected: { label: 'Connected', dot: 'bg-emerald-500' },
+  connecting: { label: 'Connecting…', dot: 'animate-pulse bg-muted-foreground' },
+  disconnected: { label: 'Disconnected', dot: 'bg-destructive' },
+}
+
+function LiveStatusLabel() {
+  const status = useLiveStore((state) => state.status)
+  const meta = LIVE_STATUS_META[status]
+  return (
+    <span className="flex items-center gap-2 text-sm font-medium">
+      <span className={cn('size-2 rounded-full', meta.dot)} />
+      {meta.label}
+    </span>
+  )
+}
+
+function EnvKey({ children }: { children: ReactNode }) {
+  return <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{children}</code>
+}
+
+function ProviderSettings() {
+  const { data, isPending, isError, isFetching, refetch } = useAppSettings()
+
+  if (isPending) {
+    return <p className="p-4 text-sm text-muted-foreground">Loading settings…</p>
+  }
+  if (isError) {
+    return (
+      <div className="flex items-center justify-between gap-4 p-4">
+        <p className="text-sm text-destructive">Could not load settings from the backend.</p>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+          Retry
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {data.providers.map((provider) => (
+        <div key={provider.name}>
+          <SettingRow
+            label={provider.label}
+            description={
+              provider.available ? (
+                <>
+                  New addresses use <span className="font-mono whitespace-nowrap">@{provider.domain}</span>
+                </>
+              ) : (
+                <span className="break-words text-destructive">{provider.error}</span>
+              )
+            }
+          >
+            <div className="flex items-center gap-2">
+              {provider.name === data.defaultProvider && <Badge variant="secondary">Default</Badge>}
+              <span className="flex items-center gap-2 text-sm font-medium">
+                <span
+                  className={cn(
+                    'size-2 rounded-full',
+                    provider.available ? 'bg-emerald-500' : 'bg-destructive',
+                  )}
+                />
+                {provider.available ? 'Available' : 'Unavailable'}
+              </span>
+            </div>
+          </SettingRow>
+          <Separator />
+        </div>
+      ))}
+      <SettingRow
+        label="Email ingest"
+        description={
+          <>
+            Receives mail for the own-domain provider from the Cloudflare Email Worker. Set{' '}
+            <EnvKey>INGEST_SECRET</EnvKey> to enable.
+          </>
+        }
+      >
+        <span className="text-sm font-medium">{data.inbox.ingestEnabled ? 'Enabled' : 'Disabled'}</span>
+      </SettingRow>
       <Separator />
-      <SettingRow label="Mail provider" description="Temporary inboxes are created on this service">
-        <span className="font-mono text-sm">Mail.tm</span>
+      <SettingRow
+        label="Live updates"
+        description="New mail appears instantly through a server-sent events stream; inboxes still poll as a fallback"
+      >
+        <LiveStatusLabel />
       </SettingRow>
     </>
   )

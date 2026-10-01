@@ -5,27 +5,71 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"qa-mail-manager/internal/mailtm"
 	"qa-mail-manager/internal/models"
+	"qa-mail-manager/internal/providers"
 )
 
 const randomCharset = "abcdefghijklmnopqrstuvwxyz0123456789"
 
-// AccountService contains the business logic for managing Mail.tm accounts.
+// AccountService contains the business logic for managing generated mailboxes.
 type AccountService struct {
-	db     *gorm.DB
-	mailtm *mailtm.Service
+	db        *gorm.DB
+	providers map[string]providers.MailProvider
+	events    *EventHub
+	// baseline holds the environment settings; overrides from the Settings page are
+	// layered on top of it into settings.
+	baseline Settings
+
+	mu            sync.RWMutex
+	settings      Settings
+	usernames     *usernameGenerator
+	legacyPattern *regexp.Regexp
 }
 
-// NewAccountService builds an AccountService with its dependencies injected.
-func NewAccountService(db *gorm.DB, mailtmSvc *mailtm.Service) *AccountService {
-	return &AccountService{db: db, mailtm: mailtmSvc}
+// NewAccountService builds an AccountService. settings.DefaultProvider is used for new
+// accounts when the request names none, and must be one of the given providers.
+// Call LoadSettingOverrides afterwards to apply values saved from the Settings page.
+func NewAccountService(db *gorm.DB, settings Settings, mailProviders ...providers.MailProvider) (*AccountService, error) {
+	s := &AccountService{
+		db:        db,
+		providers: map[string]providers.MailProvider{},
+		events:    NewEventHub(),
+		baseline:  settings,
+	}
+	for _, p := range mailProviders {
+		s.providers[p.Name()] = p
+	}
+	if err := s.validateSettings(settings); err != nil {
+		return nil, err
+	}
+	s.setEffective(settings)
+	return s, nil
+}
+
+// Events is the hub the SSE endpoint subscribes to.
+func (s *AccountService) Events() *EventHub {
+	return s.events
+}
+
+// providerFor returns the provider that owns the account's mailbox.
+func (s *AccountService) providerFor(account *models.MailAccount) (providers.MailProvider, error) {
+	name := account.Provider
+	if name == "" {
+		name = providers.NameMailTM
+	}
+	p, ok := s.providers[name]
+	if !ok {
+		return nil, fmt.Errorf("account %s uses unavailable mail provider %q", account.ID, name)
+	}
+	return p, nil
 }
 
 // randomString generates a cryptographically secure random alphanumeric string.
@@ -40,32 +84,29 @@ func randomString(length int) (string, error) {
 	return string(bytes), nil
 }
 
-// Limits for the free-text labels users attach to generated accounts.
-const (
-	MaxTagLength  = 50
-	MaxNoteLength = 500
-)
-
 // ErrAccountNotFound is returned when no stored account has the given id.
 var ErrAccountNotFound = errors.New("account not found")
 
 // ErrInvalidInput marks validation failures so handlers can answer 400 instead of 502.
 var ErrInvalidInput = errors.New("invalid input")
 
-// GenerateAccountInput holds the optional labels for a new account.
+// GenerateAccountInput holds the optional labels and provider for a new account.
+// An empty Provider means the configured default.
 type GenerateAccountInput struct {
-	Tag  string
-	Note string
+	Tag      string
+	Note     string
+	Provider string
 }
 
 // Validate trims the labels and enforces their length limits (counted in characters).
-func (in *GenerateAccountInput) Validate() error {
+func (in *GenerateAccountInput) Validate(limits Limits) error {
 	in.Tag = strings.TrimSpace(in.Tag)
 	in.Note = strings.TrimSpace(in.Note)
-	if err := validateLabel("tag", in.Tag, MaxTagLength); err != nil {
+	in.Provider = strings.ToLower(strings.TrimSpace(in.Provider))
+	if err := validateLabel("tag", in.Tag, limits.TagMaxLength); err != nil {
 		return err
 	}
-	return validateLabel("note", in.Note, MaxNoteLength)
+	return validateLabel("note", in.Note, limits.NoteMaxLength)
 }
 
 func validateLabel(field, value string, maxLength int) error {
@@ -87,14 +128,14 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id uuid.UUID, input 
 	updates := map[string]any{}
 	if input.Tag != nil {
 		tag := strings.TrimSpace(*input.Tag)
-		if err := validateLabel("tag", tag, MaxTagLength); err != nil {
+		if err := validateLabel("tag", tag, s.current().Limits.TagMaxLength); err != nil {
 			return nil, err
 		}
 		updates["tag"] = tag
 	}
 	if input.Note != nil {
 		note := strings.TrimSpace(*input.Note)
-		if err := validateLabel("note", note, MaxNoteLength); err != nil {
+		if err := validateLabel("note", note, s.current().Limits.NoteMaxLength); err != nil {
 			return nil, err
 		}
 		updates["note"] = note
@@ -110,39 +151,59 @@ func (s *AccountService) UpdateAccount(ctx context.Context, id uuid.UUID, input 
 	if result.RowsAffected == 0 {
 		return nil, ErrAccountNotFound
 	}
-	return s.getAccount(ctx, id)
+	s.events.Publish(Event{Type: EventAccountsChanged, AccountID: id.String()})
+	return s.GetAccount(ctx, id)
 }
 
-// GenerateAccount creates a new Mail.tm account and persists it locally.
-// Input is validated first so a bad request never creates an account on Mail.tm.
+// GenerateAccount creates a mailbox on the chosen provider and persists it locally.
+// Input is validated first so a bad request never creates a remote mailbox.
 func (s *AccountService) GenerateAccount(ctx context.Context, input GenerateAccountInput) (*models.MailAccount, error) {
-	if err := input.Validate(); err != nil {
+	settings := s.current()
+	if err := input.Validate(settings.Limits); err != nil {
 		return nil, err
 	}
-
-	domain, err := s.mailtm.PickAvailableDomain(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pick mail.tm domain: %w", err)
+	providerName := input.Provider
+	if providerName == "" {
+		providerName = settings.DefaultProvider
+	}
+	provider, ok := s.providers[providerName]
+	if !ok {
+		return nil, fmt.Errorf("%w: unknown provider %q", ErrInvalidInput, input.Provider)
 	}
 
-	usernameSuffix, err := randomString(8)
+	domain, err := provider.PickDomain(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate username: %w", err)
+		return nil, fmt.Errorf("failed to pick %s domain: %w", providerName, err)
 	}
+
 	password, err := randomString(16)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate password: %w", err)
 	}
 
-	username := "qa_test_" + usernameSuffix
-	email := username + "@" + domain
-
-	accountID, err := s.mailtm.RegisterAccount(ctx, email, password)
+	s.mu.RLock()
+	usernames := s.usernames
+	s.mu.RUnlock()
+	email, accountID, err := registerUniqueAddress(domain, settings.UsernameMaxAttempts, usernames.generate, func(email string) (string, error) {
+		var count int64
+		if err := s.db.WithContext(ctx).Model(&models.MailAccount{}).Where("email = ?", email).Count(&count).Error; err != nil {
+			return "", fmt.Errorf("failed to check address: %w", err)
+		}
+		if count > 0 {
+			return "", providers.ErrAddressTaken
+		}
+		id, err := provider.CreateAddress(ctx, email, password)
+		if err != nil && !errors.Is(err, providers.ErrAddressTaken) {
+			return "", fmt.Errorf("failed to register account on %s: %w", providerName, err)
+		}
+		return id, err
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to register account on mail.tm: %w", err)
+		return nil, err
 	}
 
 	account := &models.MailAccount{
+		Provider:  providerName,
 		AccountID: accountID,
 		Email:     email,
 		Password:  password,
@@ -154,6 +215,8 @@ func (s *AccountService) GenerateAccount(ctx context.Context, input GenerateAcco
 	if err := s.db.WithContext(ctx).Create(account).Error; err != nil {
 		return nil, fmt.Errorf("failed to save account: %w", err)
 	}
+	s.markLegacy(account)
+	s.events.Publish(Event{Type: EventAccountsChanged, AccountID: account.ID.String()})
 
 	return account, nil
 }
@@ -171,8 +234,11 @@ const (
 
 // ListAccountsParams filters, sorts and paginates GET /api/accounts.
 type ListAccountsParams struct {
-	Search string
-	Status string
+	Search   string
+	Status   string
+	Provider string
+	// Legacy limits the list to accounts whose address matches the legacy pattern.
+	Legacy bool
 	Sort   string
 	Page   int
 	Limit  int
@@ -193,6 +259,7 @@ func (p *ListAccountsParams) Normalize() {
 		p.Sort = SortNewest
 	}
 	p.Search = strings.TrimSpace(p.Search)
+	p.Provider = strings.ToLower(strings.TrimSpace(p.Provider))
 }
 
 // PageMeta describes a paginated result so clients can load more on demand.
@@ -221,6 +288,16 @@ func (s *AccountService) ListAccounts(ctx context.Context, params ListAccountsPa
 	if params.Status != "" {
 		query = query.Where("status = ?", params.Status)
 	}
+	if params.Provider != "" {
+		query = query.Where("provider = ?", params.Provider)
+	}
+	if params.Legacy {
+		pattern := s.current().LegacyUsernamePattern
+		if pattern == "" {
+			return []models.MailAccount{}, PageMeta{Page: params.Page, Limit: params.Limit}, nil
+		}
+		query = query.Where(legacySQL, pattern)
+	}
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -240,6 +317,9 @@ func (s *AccountService) ListAccounts(ctx context.Context, params ListAccountsPa
 	if err != nil {
 		return nil, PageMeta{}, fmt.Errorf("failed to list accounts: %w", err)
 	}
+	for i := range accounts {
+		s.markLegacy(&accounts[i])
+	}
 
 	meta := PageMeta{
 		Page:    params.Page,
@@ -252,20 +332,78 @@ func (s *AccountService) ListAccounts(ctx context.Context, params ListAccountsPa
 
 // GetAccount returns a single stored account.
 func (s *AccountService) GetAccount(ctx context.Context, id uuid.UUID) (*models.MailAccount, error) {
-	return s.getAccount(ctx, id)
+	account, err := s.getAccount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.markLegacy(account)
+	return account, nil
 }
 
-// DomainCount is the number of accounts on one Mail.tm domain.
+// legacySQL matches the local part against the legacy pattern with PostgreSQL's regex
+// operator. Simple patterns (anchors, literals, classes) behave the same as in Go.
+const legacySQL = "split_part(email, '@', 1) ~ ?"
+
+// markLegacy flags an account whose local part matches LegacyUsernamePattern.
+// An empty pattern disables the check.
+func (s *AccountService) markLegacy(account *models.MailAccount) {
+	s.mu.RLock()
+	pattern, re := s.settings.LegacyUsernamePattern, s.legacyPattern
+	s.mu.RUnlock()
+	localPart, _, _ := strings.Cut(account.Email, "@")
+	account.LegacyName = pattern != "" && re.MatchString(localPart)
+}
+
+// ReplaceResult is the account created by ReplaceAccount and the one it replaces.
+type ReplaceResult struct {
+	Account    *models.MailAccount `json:"account"`
+	ReplacedID uuid.UUID           `json:"replacedId"`
+}
+
+// ReplaceAccount generates a fresh, human-looking address on the same provider with the
+// same tag and note, and marks the old account BLOCKED so it is not reused. The old
+// account and its inbox stay readable.
+func (s *AccountService) ReplaceAccount(ctx context.Context, id uuid.UUID) (*ReplaceResult, error) {
+	old, err := s.getAccount(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	providerName := old.Provider
+	if providerName == "" {
+		providerName = providers.NameMailTM
+	}
+	account, err := s.GenerateAccount(ctx, GenerateAccountInput{Tag: old.Tag, Note: old.Note, Provider: providerName})
+	if err != nil {
+		return nil, err
+	}
+	if err := s.UpdateStatus(ctx, old.ID, models.StatusBlocked); err != nil {
+		return nil, fmt.Errorf("new account %s created, but failed to block the old one: %w", account.Email, err)
+	}
+	return &ReplaceResult{Account: account, ReplacedID: old.ID}, nil
+}
+
+// DomainCount is the number of accounts on one domain.
 type DomainCount struct {
 	Domain string `json:"domain"`
 	Count  int64  `json:"count"`
 }
 
+// ProviderCount is the number of accounts and stored messages on one provider.
+type ProviderCount struct {
+	Provider string `json:"provider"`
+	Count    int64  `json:"count"`
+	// Messages sums the inbox sizes recorded by the last sync or ingest.
+	Messages int64 `json:"messages"`
+}
+
 // AccountStats summarises all accounts for dashboards and filter badges.
 type AccountStats struct {
-	Total    int64            `json:"total"`
-	ByStatus map[string]int64 `json:"byStatus"`
-	ByDomain []DomainCount    `json:"byDomain"`
+	Total      int64            `json:"total"`
+	ByStatus   map[string]int64 `json:"byStatus"`
+	ByDomain   []DomainCount    `json:"byDomain"`
+	ByProvider []ProviderCount  `json:"byProvider"`
+	// Legacy counts accounts whose address matches the legacy naming pattern.
+	Legacy int64 `json:"legacy"`
 }
 
 // Stats aggregates account counts per status and per domain.
@@ -276,7 +414,8 @@ func (s *AccountService) Stats(ctx context.Context) (*AccountStats, error) {
 			models.StatusUsed:      0,
 			models.StatusBlocked:   0,
 		},
-		ByDomain: []DomainCount{},
+		ByDomain:   []DomainCount{},
+		ByProvider: []ProviderCount{},
 	}
 
 	var byStatus []struct {
@@ -298,6 +437,20 @@ func (s *AccountService) Stats(ctx context.Context) (*AccountStats, error) {
 		return nil, fmt.Errorf("failed to aggregate domains: %w", err)
 	}
 
+	if err := s.db.WithContext(ctx).Model(&models.MailAccount{}).
+		Select("provider, COUNT(*) AS count, COALESCE(SUM(message_count), 0) AS messages").
+		Group("provider").Order("count DESC, provider").
+		Scan(&stats.ByProvider).Error; err != nil {
+		return nil, fmt.Errorf("failed to aggregate providers: %w", err)
+	}
+
+	if pattern := s.current().LegacyUsernamePattern; pattern != "" {
+		if err := s.db.WithContext(ctx).Model(&models.MailAccount{}).
+			Where(legacySQL, pattern).Count(&stats.Legacy).Error; err != nil {
+			return nil, fmt.Errorf("failed to count legacy accounts: %w", err)
+		}
+	}
+
 	return stats, nil
 }
 
@@ -316,10 +469,12 @@ func (s *AccountService) UpdateStatus(ctx context.Context, id uuid.UUID, status 
 	if result.RowsAffected == 0 {
 		return ErrAccountNotFound
 	}
+	s.events.Publish(Event{Type: EventAccountsChanged, AccountID: id.String()})
 	return nil
 }
 
-// DeleteAccount removes an account from PostgreSQL only (Mail.tm side is left untouched).
+// DeleteAccount removes an account (and any locally stored messages) from PostgreSQL only;
+// the Mail.tm side is left untouched.
 func (s *AccountService) DeleteAccount(ctx context.Context, id uuid.UUID) error {
 	result := s.db.WithContext(ctx).Delete(&models.MailAccount{}, "id = ?", id)
 	if result.Error != nil {
@@ -328,6 +483,7 @@ func (s *AccountService) DeleteAccount(ctx context.Context, id uuid.UUID) error 
 	if result.RowsAffected == 0 {
 		return ErrAccountNotFound
 	}
+	s.events.Publish(Event{Type: EventAccountsChanged, AccountID: id.String()})
 	return nil
 }
 

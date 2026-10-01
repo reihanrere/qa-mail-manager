@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getInitials, getSenderAddress, getSenderName } from './format'
+import { formatBytes, getInitials, getSenderAddress, getSenderName } from './format'
 
 describe('getSenderName', () => {
   it('prefers the display name', () => {
@@ -32,5 +32,18 @@ describe('getInitials', () => {
   it('handles single words and empty input', () => {
     expect(getInitials('william')).toBe('WI')
     expect(getInitials('')).toBe('?')
+  })
+})
+
+describe('formatBytes', () => {
+  it.each([
+    [0, '0 B'],
+    [512, '512 B'],
+    [1536, '1.5 KB'],
+    [20 * 1024, '20 KB'],
+    [3.2 * 1024 * 1024, '3.2 MB'],
+    [-1, '-'],
+  ])('%s -> %s', (bytes, label) => {
+    expect(formatBytes(bytes)).toBe(label)
   })
 })

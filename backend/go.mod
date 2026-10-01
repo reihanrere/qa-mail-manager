@@ -3,6 +3,7 @@ module qa-mail-manager
 go 1.25.0
 
 require (
+	github.com/emersion/go-message v0.18.2
 	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/viper v1.21.0

@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, CheckCheck, Loader2, Mail, RefreshCw, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  CheckCheck,
+  Download,
+  FileCode,
+  Loader2,
+  Mail,
+  Paperclip,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -25,7 +35,9 @@ import { inboxApi } from '@/features/inbox/api'
 import { messageKeys, removeMessageFromCache, setMessageSeenInCache } from '@/features/inbox/queries'
 import { accountKeys } from '@/features/account/queries'
 import { extractOTPFromMessage } from '@/features/inbox/utils/otp'
-import { getInitials, getSenderAddress, getSenderName } from '@/features/inbox/utils/format'
+import { formatBytes, getInitials, getSenderAddress, getSenderName } from '@/features/inbox/utils/format'
+import { resolveCidImages } from '@/features/inbox/utils/cid'
+import type { MessageAttachment } from '@/types/message'
 import { OTPCard } from './otp-card'
 
 interface MessageDetailProps {
@@ -87,7 +99,24 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
           <TooltipContent>Reload message</TooltipContent>
         </Tooltip>
         {accountId && message && message.id === messageId && (
-          <DeleteMessageButton accountId={accountId} message={message} onDeleted={onDeleted} />
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" asChild>
+                  <a
+                    href={inboxApi.sourceUrl(accountId, message.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="View source"
+                  >
+                    <FileCode className="size-4" />
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View source (raw email and headers)</TooltipContent>
+            </Tooltip>
+            <DeleteMessageButton accountId={accountId} message={message} onDeleted={onDeleted} />
+          </>
         )}
         {message && message.id === messageId && (
           <span className="ml-auto flex items-center gap-1.5 pr-2 text-xs text-muted-foreground">
@@ -139,7 +168,7 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
           />
         </div>
       ) : (
-        <MessageContent message={message} />
+        <MessageContent accountId={accountId!} message={message} />
       )}
     </div>
   )
@@ -195,7 +224,7 @@ function DeleteMessageButton({
             <span className="font-medium break-words text-foreground">
               {message.subject || '(No subject)'}
             </span>{' '}
-            will be permanently deleted from Mail.tm. This cannot be undone.
+            will be permanently deleted. This cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -239,12 +268,15 @@ function useMarkAsRead(accountId: string | undefined) {
 
 type MessageData = Awaited<ReturnType<typeof inboxApi.getMessage>>
 
-function MessageContent({ message }: { message: MessageData }) {
+function MessageContent({ accountId, message }: { accountId: string; message: MessageData }) {
   const otp = extractOTPFromMessage(message)
   const senderName = getSenderName(message.from)
   const senderAddress = getSenderAddress(message.from)
   const toLabels = (message.to ?? []).map((t) => t.address).join(', ')
-  const html = message.html?.[0]
+  const rawHtml = message.html?.[0]
+  const html =
+    rawHtml &&
+    resolveCidImages(rawHtml, message.attachments, (a) => inboxApi.attachmentUrl(accountId, message.id, a.id))
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -285,6 +317,10 @@ function MessageContent({ message }: { message: MessageData }) {
         </div>
       )}
 
+      {message.attachments?.length > 0 && (
+        <AttachmentList accountId={accountId} messageId={message.id} attachments={message.attachments} />
+      )}
+
       {html ? (
         <div className="flex min-h-0 flex-1 flex-col p-4">
           {/* Sandboxed so the email's own styles and scripts cannot affect the app */}
@@ -304,6 +340,54 @@ function MessageContent({ message }: { message: MessageData }) {
           </div>
         </ScrollArea>
       )}
+    </div>
+  )
+}
+
+/** Attachments as chips: the name opens the file (images and text in the browser), the icon downloads it. */
+function AttachmentList({
+  accountId,
+  messageId,
+  attachments,
+}: {
+  accountId: string
+  messageId: string
+  attachments: MessageAttachment[]
+}) {
+  return (
+    <div className="shrink-0 px-4 pt-4">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Paperclip className="size-3.5" />
+        {attachments.length} attachment{attachments.length === 1 ? '' : 's'}
+      </p>
+      <ul className="flex flex-wrap gap-2">
+        {attachments.map((attachment) => (
+          <li
+            key={attachment.id}
+            className="flex max-w-full min-w-0 items-center rounded-md border bg-muted/40 text-xs"
+          >
+            <a
+              href={inboxApi.attachmentUrl(accountId, messageId, attachment.id)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-w-0 items-center gap-2 py-1.5 pr-1 pl-2.5 hover:underline"
+              title={`${attachment.filename} (${attachment.contentType})`}
+            >
+              <span className="truncate font-medium">{attachment.filename}</span>
+              <span className="shrink-0 text-muted-foreground tabular-nums">
+                {formatBytes(attachment.size)}
+              </span>
+            </a>
+            <a
+              href={inboxApi.attachmentUrl(accountId, messageId, attachment.id, true)}
+              className="flex shrink-0 items-center px-2 py-1.5 text-muted-foreground hover:text-foreground"
+              aria-label={`Download ${attachment.filename}`}
+            >
+              <Download className="size-3.5" />
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

@@ -31,14 +31,105 @@ paths:
                     type: string
                     example: ok
 
+  /api/settings:
+    get:
+      tags: [Settings]
+      summary: Read-only runtime configuration
+      description: >
+        Providers with their current domain and availability, label limits and inbox options.
+        Values come from environment variables (see .env.example); the UI uses them instead of
+        hard-coded copies.
+      responses:
+        '200':
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AppSettings'
+
+    patch:
+      tags: [Settings]
+      summary: Change editable settings (PATCH /api/settings)
+      description: >
+        `values` sets keys (same names as `editable` in GET /api/settings), `reset` returns keys
+        to their environment defaults. The whole result is validated before anything is saved;
+        changes apply immediately and survive restarts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                values:
+                  type: object
+                  additionalProperties: true
+                  example: { tagMaxLength: 80, messageRetention: "168h", defaultProvider: "local" }
+                reset:
+                  type: array
+                  items:
+                    type: string
+                  example: [usernameFirstNames]
+      responses:
+        '200':
+          description: Updated settings (same shape as GET)
+        '400':
+          description: Unknown key or invalid value
+
+  /api/ingest:
+    post:
+      tags: [Ingest]
+      summary: Store a raw email for a local-provider account
+      description: >
+        Served only on the ingest server (INGEST_PORT, default 8081), not on the main API port.
+        Called by the Cloudflare Email Worker through the tunnel. Disabled when INGEST_SECRET is empty.
+      parameters:
+        - in: header
+          name: X-Ingest-Secret
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Envelope-To
+          required: false
+          description: SMTP recipient reported by Cloudflare; preferred over the To/Cc headers
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          message/rfc822:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '201':
+          description: Stored
+        '200':
+          description: Duplicate Message-ID for this account; nothing stored
+        '400':
+          description: Empty body
+        '401':
+          description: Missing or wrong secret
+        '404':
+          description: No local account for the recipient (the Worker rejects the email)
+        '413':
+          description: Larger than INGEST_MAX_BYTES
+        '422':
+          description: Not a parseable email
+
   /api/accounts/generate:
     post:
       tags: [Accounts]
-      summary: Generate a new Mail.tm account and save it
+      summary: Generate a new mailbox account and save it
       description: >
-        Fetches an available Mail.tm domain, generates a random username/password,
-        registers the account on Mail.tm, and persists it to PostgreSQL.
-        The optional tag and note are validated before anything is created on Mail.tm.
+        Picks a domain on the requested provider (default from MAIL_PROVIDER), generates a
+        human-looking username (e.g. rinda.saputra91) and a random password, registers the
+        mailbox (Mail.tm only; the local catch-all needs no registration), and persists it to
+        PostgreSQL. The optional tag, note and provider are validated before anything is created.
       requestBody:
         required: false
         content:
@@ -56,13 +147,13 @@ paths:
                   data:
                     $ref: '#/components/schemas/MailAccount'
         '400':
-          description: Invalid body, or tag/note too long
+          description: Invalid body, tag/note too long, or unknown provider
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '502':
-          description: Mail.tm request failed
+          description: Provider request failed (e.g. Mail.tm down or CATCHALL_DOMAIN not set)
           content:
             application/json:
               schema:
@@ -83,6 +174,16 @@ paths:
           schema:
             type: string
             enum: [AVAILABLE, USED, BLOCKED]
+        - name: provider
+          in: query
+          schema:
+            type: string
+            enum: [mailtm, local]
+        - name: legacy
+          in: query
+          description: Only accounts whose address matches LEGACY_USERNAME_PATTERN (old, detectable naming)
+          schema:
+            type: boolean
         - name: sort
           in: query
           description: >
@@ -436,6 +537,112 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/accounts/{id}/messages/{messageId}/attachments/{attachmentId}:
+    get:
+      tags: [Inbox]
+      summary: Download an attachment
+      description: >
+        Images and plain text open in the browser; every other type is sent as a download.
+        `download=true` always downloads.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: download
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: The file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Account, message or attachment not found
+
+  /api/accounts/{id}/messages/{messageId}/source:
+    get:
+      tags: [Inbox]
+      summary: Raw message source (RFC 5322) with all headers
+      description: Shown as text/plain; `download=true` saves it as .eml (message/rfc822).
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: download
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Raw message
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Account or message not found (or stored before raw sources were kept)
+
+  /api/accounts/{id}/replace:
+    post:
+      tags: [Accounts]
+      summary: Replace an address with a new realistic one
+      description: >
+        Generates a new address on the same provider with the same tag and note, and marks the
+        old account BLOCKED. Meant for legacy (qa_test_*) addresses.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '201':
+          description: Replacement created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      account:
+                        $ref: '#/components/schemas/MailAccount'
+                      replacedId:
+                        type: string
+                        format: uuid
+        '404':
+          description: Account not found
+        '502':
+          description: Provider request failed
+
+  /api/events:
+    get:
+      tags: [Settings]
+      summary: Live updates (server-sent events)
+      description: >
+        Streams `message.created`, `accounts.changed` and `settings.changed` events as
+        `event: <type>` / `data: <json>` frames, with a comment heartbeat every
+        EVENTS_HEARTBEAT_INTERVAL.
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
 components:
   parameters:
     Page:
@@ -487,12 +694,64 @@ components:
       properties:
         tag:
           type: string
-          maxLength: 50
+          description: At most TAG_MAX_LENGTH characters (default 50)
           example: login-flow
         note:
           type: string
-          maxLength: 500
+          description: At most NOTE_MAX_LENGTH characters (default 500)
           example: Used for the OTP regression suite
+        provider:
+          type: string
+          enum: [mailtm, local]
+          description: Omit to use the server default (MAIL_PROVIDER)
+
+    AppSettings:
+      type: object
+      properties:
+        defaultProvider:
+          type: string
+          example: local
+        providers:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                enum: [mailtm, local]
+              label:
+                type: string
+              domain:
+                type: string
+                example: re-testing.me
+              available:
+                type: boolean
+              error:
+                type: string
+                description: Why the provider cannot generate accounts right now
+        limits:
+          type: object
+          properties:
+            tagMaxLength:
+              type: integer
+              example: 50
+            noteMaxLength:
+              type: integer
+              example: 500
+        inbox:
+          type: object
+          properties:
+            syncInterval:
+              type: string
+              example: 2m0s
+            searchMaxPages:
+              type: integer
+              example: 10
+            messageRetention:
+              type: string
+              example: 720h0m0s
+            ingestEnabled:
+              type: boolean
 
     UpdateStatusRequest:
       type: object
@@ -508,6 +767,12 @@ components:
         id:
           type: string
           format: uuid
+        provider:
+          type: string
+          enum: [mailtm, local]
+        legacyName:
+          type: boolean
+          description: Address matches LEGACY_USERNAME_PATTERN and should be replaced
         accountId:
           type: string
         email:
@@ -568,6 +833,21 @@ components:
                 type: string
               count:
                 type: integer
+        byProvider:
+          type: array
+          items:
+            type: object
+            properties:
+              provider:
+                type: string
+              count:
+                type: integer
+              messages:
+                type: integer
+                description: Sum of recorded inbox sizes
+        legacy:
+          type: integer
+          description: Accounts matching LEGACY_USERNAME_PATTERN
 
     MessageSummary:
       type: object
@@ -622,6 +902,22 @@ components:
           type: array
           items:
             type: string
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              filename:
+                type: string
+              contentType:
+                type: string
+              size:
+                type: integer
+              contentId:
+                type: string
+                description: Referenced from the HTML body as cid:<contentId>
         createdAt:
           type: string
           format: date-time

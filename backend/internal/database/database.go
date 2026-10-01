@@ -22,7 +22,7 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	if err := db.AutoMigrate(&models.MailAccount{}); err != nil {
+	if err := db.AutoMigrate(&models.MailAccount{}, &models.Message{}, &models.SettingOverride{}); err != nil {
 		return nil, fmt.Errorf("failed to auto-migrate database: %w", err)
 	}
 

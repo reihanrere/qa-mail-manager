@@ -1,0 +1,26 @@
+From: "Finance Bot" <billing@shop-test.example>
+To: {{TO}}
+Subject: Invoice INV-2026-1010 terlampir
+Message-ID: <{{ID}}-attach@shop-test.example>
+Date: {{DATE}}
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mix"
+
+--mix
+Content-Type: text/html; charset=utf-8
+
+<p>Halo, invoice terlampir. <b>Kode konfirmasi 551 204</b>.</p><p><img src="cid:logo" alt="logo"></p>
+--mix
+Content-Type: image/png
+Content-ID: <logo>
+Content-Disposition: inline; filename="logo.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+--mix
+Content-Type: application/pdf; name="INV-2026-1010.pdf"
+Content-Disposition: attachment; filename="INV-2026-1010.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nPj4KZW5kb2JqCnRyYWlsZXIKPDwvUm9vdCAxIDAgUj4+CiUlRU9GCg==
+--mix--

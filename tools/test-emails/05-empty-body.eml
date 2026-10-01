@@ -1,0 +1,8 @@
+From: system@monitor-test.example
+To: {{TO}}
+Subject:
+Message-ID: <{{ID}}-empty@monitor-test.example>
+Date: {{DATE}}
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+

@@ -19,7 +19,7 @@ export const messageKeys = {
     ['message', accountId, messageId] as const,
 }
 
-/** An account's inbox, 30 messages per page (Mail.tm's page size), optionally filtered by `search`. */
+/** An account's inbox, 30 messages per page (the backend's page size), optionally filtered by `search`. */
 export function useInfiniteMessages(accountId: string | undefined, search: string) {
   return useInfiniteQuery({
     queryKey: messageKeys.list(accountId, search),

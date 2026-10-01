@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"qa-mail-manager/internal/mailtm"
+	"qa-mail-manager/internal/providers"
 	"qa-mail-manager/internal/services"
 	"qa-mail-manager/internal/utils"
 )
@@ -19,7 +20,7 @@ func errorStatus(err error, fallback int) int {
 	switch {
 	case errors.Is(err, errInvalidAccountID), errors.Is(err, services.ErrInvalidInput):
 		return http.StatusBadRequest
-	case errors.Is(err, services.ErrAccountNotFound):
+	case errors.Is(err, services.ErrAccountNotFound), errors.Is(err, providers.ErrMessageNotFound):
 		return http.StatusNotFound
 	case errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound:
 		// e.g. a message id that no longer exists on Mail.tm

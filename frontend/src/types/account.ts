@@ -1,11 +1,14 @@
 import type { ApiResponse, PaginatedResponse } from './api'
+import type { MailProviderName } from './settings'
 
 /** Lifecycle of a test account: free to use, already used by a test, or blocked. */
 export type AccountStatus = 'AVAILABLE' | 'USED' | 'BLOCKED'
 
-/** A stored Mail.tm test account (the password never leaves the backend). */
+/** A stored test account (the password never leaves the backend). */
 export interface MailAccount {
   id: string
+  /** Backend that owns the mailbox */
+  provider: MailProviderName
   accountId: string
   email: string
   domain: string
@@ -15,6 +18,8 @@ export interface MailAccount {
   /** Newest inbox message, refreshed by the backend's background inbox sync */
   lastMessageAt: string | null
   messageCount: number
+  /** Address matches the old, detectable naming pattern and should be replaced */
+  legacyName: boolean
   createdAt: string
   updatedAt: string
 }
@@ -26,6 +31,9 @@ export type AccountSort = 'newest' | 'latest_message'
 export interface ListAccountsParams {
   search?: string
   status?: AccountStatus
+  provider?: MailProviderName
+  /** Only accounts with a legacy (detectable) address */
+  legacy?: boolean
   sort?: AccountSort
   page?: number
   limit?: number
@@ -36,16 +44,28 @@ export interface AccountStats {
   total: number
   byStatus: Record<AccountStatus, number>
   byDomain: { domain: string; count: number }[]
+  /** Accounts and recorded inbox messages per provider */
+  byProvider: { provider: MailProviderName; count: number; messages: number }[]
+  /** Accounts whose address matches the legacy naming pattern */
+  legacy: number
+}
+
+/** Response of `POST /api/accounts/:id/replace`. */
+export interface ReplaceAccountResult {
+  account: MailAccount
+  replacedId: string
 }
 
 export type AccountsResponse = PaginatedResponse<MailAccount>
 export type AccountResponse = ApiResponse<MailAccount>
 export type AccountStatsResponse = ApiResponse<AccountStats>
 
-/** Optional labels for `POST /api/accounts/generate` (tag ≤ 50, note ≤ 500 characters). */
+/** Optional labels and provider for `POST /api/accounts/generate`; limits come from `GET /api/settings`. */
 export interface GenerateAccountRequest {
   tag?: string
   note?: string
+  /** Omit to use the server default */
+  provider?: MailProviderName
 }
 
 /** Omitted fields are unchanged; an empty string clears the value */

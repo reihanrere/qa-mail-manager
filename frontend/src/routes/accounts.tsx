@@ -10,7 +10,7 @@ export const Route = createFileRoute('/accounts')({
 function AccountsPage() {
   return (
     <>
-      <AppHeader title="Accounts" description="Manage Mail.tm test accounts" />
+      <AppHeader title="Accounts" description="Manage test email accounts" />
       <PageContainer>
         <AccountsList />
       </PageContainer>

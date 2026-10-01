@@ -1,0 +1,56 @@
+From: "Tokopedia Keamanan 🔐" <noreply@security.tokopedia-test.example>
+To: "Rinda Saputra" <{{TO}}>
+Cc: qa-lead@re-testing.me
+Subject: =?UTF-8?B?W1Rva29wZWRpYV0gS29kZSB2ZXJpZmlrYXNpIGFrdW4ga2FtdSDinIUgSmFuZ2FuIGJhZ2lrYW4ga2UgcGloYWsgbWFuYXB1biwgdGVybWFzdWsgQ1MgVG9rb3BlZGlh?=
+Message-ID: <{{ID}}-otp-html@security.tokopedia-test.example>
+Date: {{DATE}}
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt-otp"
+
+--alt-otp
+Content-Type: text/plain; charset=utf-8
+
+Halo Rinda,
+
+Kode verifikasi kamu: 482 913
+
+Kode berlaku 5 menit. Jangan bagikan ke siapa pun.
+Verifikasi lewat link: https://example.com/verify?token=abc123
+
+Salam,
+Tim Keamanan
+--alt-otp
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!doctype html>
+<html><head><style>
+  .btn{background:#03ac0e;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:no=
+ne;display:inline-block;font-weight:600}
+  .code td{font-size:28px;letter-spacing:6px;font-family:monospace;padding:4px 8px;border:1p=
+x solid #ddd}
+</style></head>
+<body style=3D"background:#f5f5f5">
+<table width=3D"100%" cellpadding=3D"0" cellspacing=3D"0"><tr><td align=3D"center">
+<table width=3D"600" style=3D"background:#fff;border-radius:12px;padding:24px">
+  <tr><td><img src=3D"https://placehold.co/1200x240/03ac0e/ffffff/png?text=3DTokopedia+Test=
+" alt=3D"Banner lebar (harus mengecil, max-width 100%)"></td></tr>
+  <tr><td><h2>Halo Rinda &#128075;</h2>
+  <p>Gunakan <strong>kode verifikasi</strong> berikut untuk masuk:</p></td></tr>
+  <tr><td><table class=3D"code"><tr><td>4</td><td>8</td><td>2</td><td>9</td><td>1</td><td=
+>3</td></tr></table></td></tr>
+  <tr><td style=3D"padding:16px 0"><a class=3D"btn" href=3D"https://example.com/verify?to=
+ken=3Dabc123">Verifikasi Sekarang</a></td></tr>
+  <tr><td><p>Link teks biasa: <a href=3D"https://example.com/help">Pusat Bantuan</a> &mdash=
+; harus terbuka di tab baru.</p>
+  <p>URL panjang tanpa spasi untuk tes word-break: https://example.com/a/very/long/path/tha=
+t/keeps/going/and/going/without/any/spaces/to/check/that/the/layout/does/not/overflow/hori=
+zontally/at/all?with=3Dquery&amp;and=3Dmore&amp;params=3Dtrue</p>
+  <ul><li>Karakter khusus: &lt;script&gt; &amp; &quot;kutip&quot; &#169; &#8364;</li>
+  <li>Emoji: &#127881; &#9989; &#128640;</li></ul>
+  <script>document.body.innerHTML=3D'SCRIPT BERJALAN - sandbox gagal!'</script>
+  <p style=3D"color:#999;font-size:12px">Jika kamu tidak meminta kode ini, abaikan email in=
+i.</p></td></tr>
+</table></td></tr></table>
+</body></html>
+--alt-otp--

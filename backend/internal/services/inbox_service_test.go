@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"qa-mail-manager/internal/mailtm"
+	"qa-mail-manager/internal/models"
+	"qa-mail-manager/internal/providers"
 )
 
 func summary(id, subject, createdAt string) mailtm.MessageSummary {
@@ -50,7 +52,7 @@ func TestMessageMatches(t *testing.T) {
 }
 
 // newPagedMailTM serves `total` messages, newest first, 30 per page like Mail.tm.
-func newPagedMailTM(t *testing.T, total int, subjectFor func(i int) string) (*mailtm.Service, *int) {
+func newPagedMailTM(t *testing.T, total int, subjectFor func(i int) string) (providers.MailProvider, *int) {
 	t.Helper()
 	pagesServed := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,8 +72,12 @@ func newPagedMailTM(t *testing.T, total int, subjectFor func(i int) string) (*ma
 		}
 	}))
 	t.Cleanup(server.Close)
-	return mailtm.NewService(mailtm.NewClient(server.URL)), &pagesServed
+	return providers.NewMailTM(mailtm.NewService(mailtm.NewClient(server.URL))), &pagesServed
 }
+
+const testMaxPages = 10
+
+var testAccount = &models.MailAccount{Email: "ayu.putra@example.com", Password: "secret"}
 
 func TestSearchInboxScansAllPages(t *testing.T) {
 	svc, pages := newPagedMailTM(t, 70, func(i int) string {
@@ -80,9 +86,8 @@ func TestSearchInboxScansAllPages(t *testing.T) {
 		}
 		return "newsletter"
 	})
-	s := &AccountService{mailtm: svc}
 
-	result, err := s.searchInbox(context.Background(), "jwt", "otp")
+	result, err := searchInbox(context.Background(), svc, testAccount, "otp", testMaxPages)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,30 +103,28 @@ func TestSearchInboxScansAllPages(t *testing.T) {
 }
 
 func TestSearchInboxStopsAtPageCap(t *testing.T) {
-	total := (maxSearchPages + 2) * mailtm.MessagesPerPage
+	total := (testMaxPages + 2) * mailtm.MessagesPerPage
 	svc, pages := newPagedMailTM(t, total, func(int) string { return "hello" })
-	s := &AccountService{mailtm: svc}
 
-	result, err := s.searchInbox(context.Background(), "jwt", "hello")
+	result, err := searchInbox(context.Background(), svc, testAccount, "hello", testMaxPages)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *pages != maxSearchPages {
-		t.Fatalf("expected scan to stop at %d pages, got %d", maxSearchPages, *pages)
+	if *pages != testMaxPages {
+		t.Fatalf("expected scan to stop at %d pages, got %d", testMaxPages, *pages)
 	}
 	if !result.Meta.Truncated {
 		t.Fatal("expected Truncated when the cap is hit")
 	}
-	if len(result.Messages) != maxSearchPages*mailtm.MessagesPerPage {
-		t.Fatalf("expected %d matches, got %d", maxSearchPages*mailtm.MessagesPerPage, len(result.Messages))
+	if len(result.Messages) != testMaxPages*mailtm.MessagesPerPage {
+		t.Fatalf("expected %d matches, got %d", testMaxPages*mailtm.MessagesPerPage, len(result.Messages))
 	}
 }
 
 func TestSearchInboxEmptyInbox(t *testing.T) {
 	svc, _ := newPagedMailTM(t, 0, func(int) string { return "" })
-	s := &AccountService{mailtm: svc}
 
-	result, err := s.searchInbox(context.Background(), "jwt", "anything")
+	result, err := searchInbox(context.Background(), svc, testAccount, "anything", testMaxPages)
 	if err != nil {
 		t.Fatal(err)
 	}

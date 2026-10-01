@@ -35,8 +35,26 @@ services:
       DB_NAME: ${DB_NAME:-qa_mail_manager}
       MAILTM_BASE_URL: ${MAILTM_BASE_URL:-https://api.mail.tm}
       INBOX_SYNC_INTERVAL: ${INBOX_SYNC_INTERVAL:-2m}
+      # Optional tunables: empty means the default in backend/internal/config/config.go
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-}
+      CATCHALL_DOMAIN: ${CATCHALL_DOMAIN:-}
+      INGEST_SECRET: ${INGEST_SECRET:-}
+      INGEST_PORT: ${INGEST_PORT:-}
+      INGEST_MAX_BYTES: ${INGEST_MAX_BYTES:-}
+      MESSAGE_RETENTION: ${MESSAGE_RETENTION:-}
+      MESSAGE_PRUNE_INTERVAL: ${MESSAGE_PRUNE_INTERVAL:-}
+      MAILTM_REQUEST_DELAY: ${MAILTM_REQUEST_DELAY:-}
+      INBOX_SEARCH_MAX_PAGES: ${INBOX_SEARCH_MAX_PAGES:-}
+      USERNAME_MAX_ATTEMPTS: ${USERNAME_MAX_ATTEMPTS:-}
+      USERNAME_FIRST_NAMES: ${USERNAME_FIRST_NAMES:-}
+      USERNAME_LAST_NAMES: ${USERNAME_LAST_NAMES:-}
+      TAG_MAX_LENGTH: ${TAG_MAX_LENGTH:-}
+      NOTE_MAX_LENGTH: ${NOTE_MAX_LENGTH:-}
+      LEGACY_USERNAME_PATTERN: ${LEGACY_USERNAME_PATTERN:-}
+      EVENTS_HEARTBEAT_INTERVAL: ${EVENTS_HEARTBEAT_INTERVAL:-}
       TZ: ${TZ:-Asia/Jakarta}
-    # Not published: reached through the frontend's nginx at /api, /health and /docs
+    # Not published: reached through the frontend's nginx at /api, /health and /docs.
+    # The ingest server (INGEST_PORT, default 8081) is reached only by cloudflared.
 
   frontend:
     build: ./frontend
@@ -45,7 +63,23 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "${WEB_PORT:-3000}:80"
+      # Loopback only by default: the app has no login and shows OTPs, so it must not be
+      # reachable from the LAN. Set WEB_BIND=0.0.0.0 only on a trusted network.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:80"
+
+  # Cloudflare tunnel to the ingest server; enable with COMPOSE_PROFILES=tunnel in .env.
+  # In the Cloudflare dashboard, point the tunnel's public hostname at http://backend:8081
+  # (or your INGEST_PORT).
+  cloudflared:
+    image: cloudflare/cloudflared:${CLOUDFLARED_VERSION:-latest}
+    restart: unless-stopped
+    profiles: [tunnel]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres-data:

@@ -7,8 +7,11 @@ import (
 )
 
 // RegisterRoutes wires all API routes to their handlers.
-func RegisterRoutes(app *fiber.App, accountHandler *handlers.AccountHandler, inboxHandler *handlers.InboxHandler) {
+func RegisterRoutes(app *fiber.App, accountHandler *handlers.AccountHandler, inboxHandler *handlers.InboxHandler, eventsHandler *handlers.EventsHandler) {
 	api := app.Group("/api")
+	api.Get("/settings", accountHandler.Settings)
+	api.Patch("/settings", accountHandler.UpdateSettings)
+	api.Get("/events", eventsHandler.Stream)
 
 	accounts := api.Group("/accounts")
 	accounts.Post("/generate", accountHandler.Generate)
@@ -19,11 +22,22 @@ func RegisterRoutes(app *fiber.App, accountHandler *handlers.AccountHandler, inb
 	accounts.Patch("/:id", accountHandler.Update)
 	accounts.Patch("/:id/status", accountHandler.UpdateStatus)
 	accounts.Delete("/:id", accountHandler.Delete)
+	accounts.Post("/:id/replace", accountHandler.Replace)
 
 	accounts.Get("/:id/messages", inboxHandler.ListMessages)
 	accounts.Get("/:id/messages/:messageId", inboxHandler.GetMessageDetail)
 	accounts.Delete("/:id/messages/:messageId", inboxHandler.DeleteMessage)
 	accounts.Patch("/:id/messages/:messageId/read", inboxHandler.MarkMessageRead)
+	accounts.Get("/:id/messages/:messageId/source", inboxHandler.GetSource)
+	accounts.Get("/:id/messages/:messageId/attachments/:attachmentId", inboxHandler.GetAttachment)
+}
+
+// RegisterIngestRoutes wires the ingest-only server that the Cloudflare tunnel exposes.
+func RegisterIngestRoutes(app *fiber.App, ingestHandler *handlers.IngestHandler) {
+	app.Get("/health", func(c fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+	app.Post("/api/ingest", ingestHandler.Ingest)
 }
 
 // swaggerUIPage renders a minimal Swagger UI shell backed by the CDN bundle,

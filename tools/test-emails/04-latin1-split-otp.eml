@@ -1,0 +1,15 @@
+From: =?ISO-8859-1?Q?Caf=E9_Bank_S=E9curit=E9?= <securite@banque-test.example>
+To: {{TO}}
+Subject: =?ISO-8859-1?Q?Votre_code_de_s=E9curit=E9?=
+Message-ID: <{{ID}}-latin1@banque-test.example>
+Date: {{DATE}}
+MIME-Version: 1.0
+Content-Type: text/plain; charset=iso-8859-1
+Content-Transfer-Encoding: quoted-printable
+
+Bonjour,
+
+Votre security code est 735-208 (format avec tiret).
+Caract=E8res accentu=E9s : =E9 =E8 =E0 =E7 =FC =F1 -- doivent s'afficher correctement.
+
+Merci.

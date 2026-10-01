@@ -1,0 +1,37 @@
+From: "Shopee Promo" <promo@shopee-test.example>
+To: {{TO}}
+Subject: Flash Sale 10.10 - diskon sampai 90% hanya tahun 2026
+Message-ID: <{{ID}}-newsletter@shopee-test.example>
+Date: {{DATE}}
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="mix-news"
+
+--mix-news
+Content-Type: multipart/alternative; boundary="alt-news"
+
+--alt-news
+Content-Type: text/plain; charset=utf-8
+
+Flash sale 10.10! Harga mulai Rp 150.000. Hubungi 0812 3456 7890. Order #20261010.
+--alt-news
+Content-Type: text/html; charset=utf-8
+
+<h1 style="color:#ee4d2d">Flash Sale 10.10 &#128293;</h1>
+<p>Angka di email ini <b>tidak boleh</b> terdeteksi sebagai OTP:
+tahun 2026, harga Rp 150.000, telepon 0812 3456 7890, order #20261010.</p>
+<table border="1" cellpadding="8" style="border-collapse:collapse">
+  <tr><th>Produk</th><th>Harga</th><th>Diskon</th></tr>
+  <tr><td>Sepatu</td><td>Rp 350.000</td><td>50%</td></tr>
+  <tr><td>Tas</td><td>Rp 150.000</td><td>90%</td></tr>
+</table>
+<p><img src="https://placehold.co/300x300/ee4d2d/ffffff/png?text=Promo" alt="Gambar produk"></p>
+<p><a href="https://example.com/sale">Belanja sekarang</a> |
+<a href="https://example.com/unsubscribe">Berhenti berlangganan</a></p>
+--alt-news--
+--mix-news
+Content-Type: application/pdf; name="invoice-10.10.pdf"
+Content-Disposition: attachment; filename="invoice-10.10.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nPj4KZW5kb2JqCnRyYWlsZXIKPDwvUm9vdCAxIDAgUj4+CiUlRU9GCg==
+--mix-news--

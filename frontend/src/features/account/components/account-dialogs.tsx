@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -20,30 +21,38 @@ import { cn } from '@/lib/utils'
 import { apiErrorMessage } from '@/lib/api-error'
 import { accountApi } from '../api'
 import { accountKeys } from '../queries'
+import { initialProvider } from '../provider'
+import { useAppSettings } from '@/features/settings/queries'
 import type { MailAccount } from '@/types/account'
-
-// Mirrors the backend limits in services.MaxTagLength / MaxNoteLength
-const MAX_TAG_LENGTH = 50
-const MAX_NOTE_LENGTH = 500
+import type { AppSettings, MailProviderName, ProviderStatus } from '@/types/settings'
 
 interface LabelsFormValues {
   tag: string
   note: string
+  /** Generate dialog only */
+  provider?: MailProviderName
 }
+
+type Limits = AppSettings['limits']
 
 // Counts characters the way the backend does (Unicode code points, after trimming)
 const charCount = (value: string) => [...value.trim()].length
 
-/** Opens a dialog to create a Mail.tm account with an optional tag and note. */
+/** Opens a dialog to create an account on a chosen provider with an optional tag and note. */
 export function GenerateAccountDialog({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   // Bumped after each success so the next open starts with an empty form
   const [formKey, setFormKey] = useState(0)
   const queryClient = useQueryClient()
+  const settings = useAppSettings()
 
   const generate = useMutation({
     mutationFn: (values: LabelsFormValues) =>
-      accountApi.generate({ tag: values.tag.trim() || undefined, note: values.note.trim() || undefined }),
+      accountApi.generate({
+        tag: values.tag.trim() || undefined,
+        note: values.note.trim() || undefined,
+        provider: values.provider,
+      }),
     onSuccess: (account) => {
       toast.success(`Generated ${account.email}`)
       queryClient.invalidateQueries({ queryKey: accountKeys.all })
@@ -55,16 +64,24 @@ export function GenerateAccountDialog({ children }: { children: ReactNode }) {
 
   return (
     <LabelsDialog
-      key={formKey}
+      // Remount once settings arrive so the provider default is applied
+      key={`${formKey}-${settings.dataUpdatedAt}`}
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => {
+        setOpen(next)
+        // Domains and availability can change (e.g. Mail.tm down), so re-check on open
+        if (next) settings.refetch()
+      }}
       trigger={children}
       title="Generate account"
-      description="Creates a new Mail.tm inbox with a random address. Tag and note are optional and only stored here."
+      description="Creates a new inbox with a realistic-looking address. Tag and note are optional and only stored here."
       submitLabel="Generate"
       pendingLabel="Generating…"
       mutation={generate}
-      defaultValues={{ tag: '', note: '' }}
+      limits={settings.data?.limits}
+      providers={settings.data?.providers ?? []}
+      providersLoading={settings.isPending}
+      defaultValues={{ tag: '', note: '', provider: initialProvider(settings.data) }}
     />
   )
 }
@@ -78,6 +95,7 @@ export function EditAccountDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const queryClient = useQueryClient()
+  const settings = useAppSettings()
 
   const update = useMutation({
     mutationFn: (values: LabelsFormValues) =>
@@ -102,6 +120,7 @@ export function EditAccountDialog({
       pendingLabel="Saving…"
       requireChanges
       mutation={update}
+      limits={settings.data?.limits}
       defaultValues={{ tag: account?.tag ?? '', note: account?.note ?? '' }}
     />
   )
@@ -118,6 +137,11 @@ interface LabelsDialogProps {
   defaultValues: LabelsFormValues
   /** Disable submit until a field differs from its default (avoids no-op edits) */
   requireChanges?: boolean
+  /** Label limits from the backend; unknown while settings load (the server still validates) */
+  limits?: Limits
+  /** When given, a provider picker is shown (generate dialog) */
+  providers?: ProviderStatus[]
+  providersLoading?: boolean
   mutation: {
     mutate: (values: LabelsFormValues) => void
     reset: () => void
@@ -138,6 +162,9 @@ function LabelsDialog({
   defaultValues,
   requireChanges = false,
   mutation,
+  limits,
+  providers,
+  providersLoading = false,
 }: LabelsDialogProps) {
   const {
     register,
@@ -147,6 +174,10 @@ function LabelsDialog({
     formState: { errors, isDirty },
   } = useForm<LabelsFormValues>({ defaultValues })
 
+  const showProviders = providers !== undefined
+  const selectedProvider = useWatch({ control, name: 'provider' })
+  const selectedDomain = providers?.find((p) => p.name === selectedProvider)?.domain
+  const noUsableProvider = showProviders && !providersLoading && !providers.some((p) => p.available)
   const tagLength = charCount(useWatch({ control, name: 'tag' }))
   const noteLength = charCount(useWatch({ control, name: 'note' }))
 
@@ -170,10 +201,57 @@ function LabelsDialog({
             <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
 
+          {showProviders && (
+            <div className="grid gap-2">
+              <Label htmlFor="account-provider">Provider</Label>
+              <Controller
+                control={control}
+                name="provider"
+                rules={{ required: 'Choose a provider' }}
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(value) => field.onChange(value as MailProviderName)}
+                    disabled={mutation.isPending || providersLoading || noUsableProvider}
+                  >
+                    <SelectTrigger id="account-provider" className="w-full" aria-invalid={!!errors.provider}>
+                      <SelectValue
+                        placeholder={providersLoading ? 'Loading providers…' : 'Choose a provider'}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {providers.map((p) => (
+                        <SelectItem key={p.name} value={p.name} disabled={!p.available}>
+                          <span>{p.label}</span>
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {p.available ? `@${p.domain}` : 'unavailable'}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.provider ? (
+                <p className="text-xs text-destructive">{errors.provider.message}</p>
+              ) : noUsableProvider ? (
+                <p className="text-xs text-destructive">
+                  No provider can create accounts right now. Check the Settings page for details.
+                </p>
+              ) : (
+                selectedDomain && (
+                  <p className="text-xs text-muted-foreground">
+                    Address will look like <span className="font-mono">name.surname@{selectedDomain}</span>
+                  </p>
+                )
+              )}
+            </div>
+          )}
+
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="account-tag">Tag</Label>
-              <CharacterCount length={tagLength} max={MAX_TAG_LENGTH} />
+              <CharacterCount length={tagLength} max={limits?.tagMaxLength} />
             </div>
             <Input
               id="account-tag"
@@ -183,7 +261,9 @@ function LabelsDialog({
               disabled={mutation.isPending}
               {...register('tag', {
                 validate: (value) =>
-                  charCount(value) <= MAX_TAG_LENGTH || `Tag must be at most ${MAX_TAG_LENGTH} characters`,
+                  !limits ||
+                  charCount(value) <= limits.tagMaxLength ||
+                  `Tag must be at most ${limits.tagMaxLength} characters`,
               })}
             />
             {errors.tag ? (
@@ -198,7 +278,7 @@ function LabelsDialog({
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="account-note">Note</Label>
-              <CharacterCount length={noteLength} max={MAX_NOTE_LENGTH} />
+              <CharacterCount length={noteLength} max={limits?.noteMaxLength} />
             </div>
             <Textarea
               id="account-note"
@@ -208,7 +288,9 @@ function LabelsDialog({
               disabled={mutation.isPending}
               {...register('note', {
                 validate: (value) =>
-                  charCount(value) <= MAX_NOTE_LENGTH || `Note must be at most ${MAX_NOTE_LENGTH} characters`,
+                  !limits ||
+                  charCount(value) <= limits.noteMaxLength ||
+                  `Note must be at most ${limits.noteMaxLength} characters`,
               })}
             />
             {errors.note && <p className="text-xs text-destructive">{errors.note.message}</p>}
@@ -234,7 +316,9 @@ function LabelsDialog({
             </Button>
             <Button
               type="submit"
-              disabled={mutation.isPending || (requireChanges && !isDirty)}
+              disabled={
+                mutation.isPending || (requireChanges && !isDirty) || noUsableProvider || providersLoading
+              }
               className="gap-2"
             >
               {mutation.isPending && <Loader2 className="size-4 animate-spin" />}
@@ -247,10 +331,15 @@ function LabelsDialog({
   )
 }
 
-function CharacterCount({ length, max }: { length: number; max: number }) {
+function CharacterCount({ length, max }: { length: number; max?: number }) {
   return (
-    <span className={cn('text-xs tabular-nums', length > max ? 'text-destructive' : 'text-muted-foreground')}>
-      {length}/{max}
+    <span
+      className={cn(
+        'text-xs tabular-nums',
+        max !== undefined && length > max ? 'text-destructive' : 'text-muted-foreground',
+      )}
+    >
+      {max === undefined ? length : `${length}/${max}`}
     </span>
   )
 }

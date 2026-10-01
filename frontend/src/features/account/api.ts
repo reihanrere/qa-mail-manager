@@ -1,5 +1,5 @@
 import { api } from '@/lib/axios'
-import type { Page } from '@/types/api'
+import type { ApiResponse, Page } from '@/types/api'
 import type {
   MailAccount,
   AccountsResponse,
@@ -8,6 +8,7 @@ import type {
   AccountStatsResponse,
   GenerateAccountRequest,
   ListAccountsParams,
+  ReplaceAccountResult,
   UpdateAccountRequest,
   UpdateStatusRequest,
 } from '@/types/account'
@@ -16,7 +17,7 @@ import type {
 export const accountApi = {
   list: async (params: ListAccountsParams = {}): Promise<Page<MailAccount>> => {
     const response = await api.get<AccountsResponse>('/accounts', {
-      params: { ...params, search: params.search || undefined },
+      params: { ...params, search: params.search || undefined, legacy: params.legacy || undefined },
     })
     return { items: response.data.data ?? [], meta: response.data.meta }
   },
@@ -38,6 +39,12 @@ export const accountApi = {
 
   generate: async (data?: GenerateAccountRequest): Promise<MailAccount> => {
     const response = await api.post<AccountResponse>('/accounts/generate', data ?? {})
+    return response.data.data
+  },
+
+  /** New address with the same provider and labels; the old account becomes BLOCKED */
+  replace: async (id: string): Promise<ReplaceAccountResult> => {
+    const response = await api.post<ApiResponse<ReplaceAccountResult>>(`/accounts/${id}/replace`)
     return response.data.data
   },
 

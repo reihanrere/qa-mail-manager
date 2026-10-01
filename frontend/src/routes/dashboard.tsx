@@ -7,6 +7,7 @@ import {
   Globe,
   Inbox,
   Mail,
+  RefreshCcw,
   RefreshCw,
   Settings2,
   ShieldAlert,
@@ -24,6 +25,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { accountApi } from '@/features/account/api'
 import { useAccountStats } from '@/features/account/queries'
+import { useProviderLabel } from '@/features/account/provider'
+import { ProviderBadge } from '@/features/account/components/provider-badge'
 import { useRefresh } from '@/hooks/use-refresh'
 import { GenerateAccountDialog } from '@/features/account/components/account-dialogs'
 import {
@@ -62,6 +65,9 @@ function DashboardPage() {
   )
   const recentAccounts = recentQuery.data?.items ?? []
   const domains = (statsQuery.data?.byDomain ?? []).map(({ domain, count }) => [domain, count] as const)
+  const byProvider = statsQuery.data?.byProvider ?? []
+  const legacyCount = statsQuery.data?.legacy ?? 0
+  const providerLabel = useProviderLabel()
 
   const stats = [
     {
@@ -241,6 +247,40 @@ function DashboardPage() {
                           </li>
                         ))}
                       </ul>
+                      {byProvider.length > 0 && (
+                        <div className="space-y-3 border-t pt-4">
+                          <p className="text-xs font-medium text-muted-foreground">Providers</p>
+                          <ul className="space-y-3 text-sm">
+                            {byProvider.map(({ provider, count, messages }) => (
+                              <li key={provider} className="space-y-1.5">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <ProviderBadge provider={provider} />
+                                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                                    {messages} message{messages === 1 ? '' : 's'}
+                                  </span>
+                                  <span className="font-medium tabular-nums">{count}</span>
+                                  <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
+                                    {percent(count, total)}%
+                                  </span>
+                                </div>
+                                <div
+                                  className="h-1.5 overflow-hidden rounded-full bg-muted"
+                                  role="img"
+                                  aria-label={`${providerLabel(provider)}: ${percent(count, total)}% of accounts`}
+                                >
+                                  <div
+                                    className={cn(
+                                      'h-full rounded-full',
+                                      provider === 'local' ? 'bg-emerald-500' : 'bg-muted-foreground/50',
+                                    )}
+                                    style={{ width: `${percent(count, total)}%` }}
+                                  />
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       {domains.length > 0 && (
                         <div className="space-y-2 border-t pt-4">
                           <p className="text-xs font-medium text-muted-foreground">Domains</p>
@@ -261,6 +301,18 @@ function DashboardPage() {
 
                 <SectionCard title="Quick Actions">
                   <div className="grid grid-cols-1 gap-2">
+                    {legacyCount > 0 && (
+                      <Button
+                        variant="outline"
+                        className="justify-start gap-2 border-amber-500/40 text-amber-700 dark:text-amber-400"
+                        asChild
+                      >
+                        <Link to="/accounts">
+                          <RefreshCcw className="size-4" />
+                          {legacyCount} old-format address{legacyCount === 1 ? '' : 'es'} to replace
+                        </Link>
+                      </Button>
+                    )}
                     <Button variant="outline" className="justify-start gap-2" asChild>
                       <Link to="/inbox">
                         <Inbox className="size-4" />

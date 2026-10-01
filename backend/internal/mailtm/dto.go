@@ -30,17 +30,20 @@ type tokenResponse struct {
 	Token string `json:"token"`
 }
 
+// Address is a sender or recipient on a message.
+type Address struct {
+	Address string `json:"address"`
+	Name    string `json:"name"`
+}
+
 // MessageSummary represents a single item in the inbox message list.
 type MessageSummary struct {
-	ID        string `json:"id"`
-	Subject   string `json:"subject"`
-	Intro     string `json:"intro"`
-	Seen      bool   `json:"seen"`
-	CreatedAt string `json:"createdAt"`
-	From      struct {
-		Address string `json:"address"`
-		Name    string `json:"name"`
-	} `json:"from"`
+	ID        string  `json:"id"`
+	Subject   string  `json:"subject"`
+	Intro     string  `json:"intro"`
+	Seen      bool    `json:"seen"`
+	CreatedAt string  `json:"createdAt"`
+	From      Address `json:"from"`
 }
 
 // MessagePage is one page of GET /messages in JSON-LD form, which carries the total count.
@@ -54,20 +57,28 @@ const MessagesPerPage = 30
 
 // MessageDetail represents the full body of a single message.
 type MessageDetail struct {
-	ID      string `json:"id"`
-	Subject string `json:"subject"`
-	Seen    bool   `json:"seen"`
-	From    struct {
-		Address string `json:"address"`
-		Name    string `json:"name"`
-	} `json:"from"`
-	To []struct {
-		Address string `json:"address"`
-		Name    string `json:"name"`
-	} `json:"to"`
-	Text      string   `json:"text"`
-	HTML      []string `json:"html"`
-	CreatedAt string   `json:"createdAt"`
+	ID          string       `json:"id"`
+	Subject     string       `json:"subject"`
+	Seen        bool         `json:"seen"`
+	From        Address      `json:"from"`
+	To          []Address    `json:"to"`
+	Text        string       `json:"text"`
+	HTML        []string     `json:"html"`
+	Attachments []Attachment `json:"attachments"`
+	CreatedAt   string       `json:"createdAt"`
+}
+
+// Attachment describes a file attached to a message. DownloadURL is Mail.tm's own
+// relative path; providers clear it before the detail reaches the frontend.
+type Attachment struct {
+	ID          string `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+	// Size in bytes
+	Size int `json:"size"`
+	// ContentID lets the UI resolve "cid:" image references in the HTML body.
+	ContentID   string `json:"contentId,omitempty"`
+	DownloadURL string `json:"downloadUrl,omitempty"`
 }
 
 // markSeenRequest is the merge-patch body sent to PATCH /messages/{id}.

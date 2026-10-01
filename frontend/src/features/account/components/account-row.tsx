@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { format, formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
-import { Check, ChevronDown, Copy, Inbox, Loader2, Pencil, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Copy, Inbox, Loader2, Pencil, RefreshCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { ACCOUNT_STATUSES, ACCOUNT_STATUS_META, type AccountStatus } from '../status'
 import type { MailAccount } from '@/types/account'
+import { LegacyBadge, ProviderBadge } from './provider-badge'
 
 /** Props shared by the per-row controls of the accounts table and mobile list. */
 export interface AccountRowProps {
@@ -25,6 +26,8 @@ export interface AccountRowProps {
   onChangeStatus: (status: AccountStatus) => void
   onDelete: () => void
   onEdit: () => void
+  /** Offered for legacy addresses: create a new address and block this one */
+  onReplace: () => void
 }
 
 /** Monospace email with a copy button, plus the note underneath when present. */
@@ -48,11 +51,15 @@ export function EmailCell({ account }: { account: MailAccount }) {
         <p className="truncate font-mono text-sm" title={account.email}>
           {account.email}
         </p>
-        {account.note && (
-          <p className="truncate text-xs text-muted-foreground" title={account.note}>
-            {account.note}
-          </p>
-        )}
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+          <ProviderBadge provider={account.provider} />
+          {account.legacyName && <LegacyBadge />}
+          {account.note && (
+            <span className="truncate text-xs text-muted-foreground" title={account.note}>
+              {account.note}
+            </span>
+          )}
+        </div>
       </div>
       <Tooltip>
         <TooltipTrigger asChild>
@@ -141,9 +148,25 @@ export function CreatedAt({ date, inline = false }: { date: string; inline?: boo
 }
 
 /** Edit, open-inbox and delete buttons for one account. */
-export function RowActions({ account, onDelete, onEdit }: AccountRowProps) {
+export function RowActions({ account, onDelete, onEdit, onReplace }: AccountRowProps) {
   return (
     <div className="flex items-center justify-end gap-1">
+      {account.legacyName && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 dark:text-amber-400"
+              onClick={onReplace}
+              aria-label="Replace with a new address"
+            >
+              <RefreshCcw className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Replace with a new address</TooltipContent>
+        </Tooltip>
+      )}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

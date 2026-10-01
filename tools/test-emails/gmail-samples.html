@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gmail Test Emails</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2129; --muted:#5f6672; --border:#dfe3e8; --accent:#1a73e8; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#15171a; --card:#1e2125; --text:#e8eaed; --muted:#a0a6ae; --border:#33373d; --accent:#8ab4f8; }
+  }
+  :root[data-theme="dark"] { --bg:#15171a; --card:#1e2125; --text:#e8eaed; --muted:#a0a6ae; --border:#33373d; --accent:#8ab4f8; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .lead { color:var(--muted); margin:0 0 24px; }
+  ol.steps { color:var(--muted); padding-left:20px; margin:0 0 28px; }
+  section { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:20px; }
+  h2 { font-size:16px; margin:0 0 4px; }
+  .tests { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+  .label { font-size:12px; font-weight:600; color:var(--muted); width:56px; }
+  .subject { flex:1; min-width:0; font-family:ui-monospace, monospace; font-size:13px; padding:6px 8px; border:1px solid var(--border); border-radius:6px; overflow-wrap:anywhere; }
+  button { font:inherit; font-size:13px; padding:6px 12px; border-radius:6px; border:1px solid var(--accent); background:transparent; color:var(--accent); cursor:pointer; }
+  button.done { background:var(--accent); color:var(--card); }
+  /* The email body itself is rendered on white like a real mail client */
+  .body { background:#fff; color:#111; border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; }
+  .note { font-size:13px; color:var(--muted); margin:10px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Email tes untuk Gmail</h1>
+  <p class="lead">Kirim dari Gmail ke alamat <code>@re-testing.me</code> yang sudah di-generate. Tiap email menguji bagian berbeda dari message detail.</p>
+  <ol class="steps">
+    <li>Di Gmail klik <b>Compose</b>, isi <b>To</b> dengan alamat akun.</li>
+    <li>Klik <b>Copy subject</b>, paste ke kolom Subject.</li>
+    <li>Klik <b>Copy body</b>, paste (Cmd+V) ke isi email. Format, tabel, link, dan gambar ikut.</li>
+    <li>Send, lalu buka Inbox di app.</li>
+  </ol>
+
+  <section>
+    <h2>1. OTP + HTML lengkap</h2>
+    <p class="tests">Menguji: OTP card (482913, format terpisah "482 913") + tombol copy, HTML di iframe, tabel, tombol link (buka tab baru), gambar lebar mengecil, URL panjang tidak overflow, emoji & karakter khusus di subject.</p>
+    <div class="row"><span class="label">Subject</span><span class="subject">[Tokopedia] Kode verifikasi akun kamu ✅ Jangan bagikan ke pihak manapun, termasuk CS Tokopedia</span><button data-copy="subject">Copy subject</button></div>
+    <div class="row"><span class="label">Body</span><button data-copy="body">Copy body</button></div>
+    <div class="body">
+      <img src="https://placehold.co/1200x240/03ac0e/ffffff/png?text=Tokopedia+Test" alt="Banner lebar" style="max-width:100%">
+      <h2 style="color:#111">Halo Rinda 👋</h2>
+      <p>Gunakan <strong>kode verifikasi</strong> berikut untuk masuk: <strong style="font-size:22px;letter-spacing:4px">482 913</strong></p>
+      <table style="border-collapse:collapse;margin:8px 0">
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 10px;font:bold 22px monospace">4</td>
+          <td style="border:1px solid #ccc;padding:6px 10px;font:bold 22px monospace">8</td>
+          <td style="border:1px solid #ccc;padding:6px 10px;font:bold 22px monospace">2</td>
+          <td style="border:1px solid #ccc;padding:6px 10px;font:bold 22px monospace">9</td>
+          <td style="border:1px solid #ccc;padding:6px 10px;font:bold 22px monospace">1</td>
+          <td style="border:1px solid #ccc;padding:6px 10px;font:bold 22px monospace">3</td>
+        </tr>
+      </table>
+      <p><a href="https://example.com/verify?token=abc123" style="background:#03ac0e;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600">Verifikasi Sekarang</a></p>
+      <p>Link teks biasa: <a href="https://example.com/help">Pusat Bantuan</a>, harus terbuka di tab baru.</p>
+      <p>URL panjang: https://example.com/a/very/long/path/that/keeps/going/and/going/without/any/spaces/to/check/the/layout/does/not/overflow?with=query&amp;and=more</p>
+      <ul><li>Karakter khusus: &lt;script&gt; &amp; "kutip" © €</li><li>Emoji: 🎉 ✅ 🚀</li></ul>
+      <p style="color:#999;font-size:12px">Jika kamu tidak meminta kode ini, abaikan email ini.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. OTP alfanumerik, teks polos</h2>
+    <p class="tests">Menguji: OTP huruf+angka (A7K9Q2), tampilan teks tanpa HTML, baris & indentasi tetap, baris panjang dibungkus.</p>
+    <div class="row"><span class="label">Subject</span><span class="subject">Your sign-in verification code</span><button data-copy="subject">Copy subject</button></div>
+    <div class="row"><span class="label">Body</span><button data-copy="body">Copy body</button></div>
+    <div class="body" style="white-space:pre-wrap;font-family:ui-monospace,monospace;font-size:13px">Hey there!
+
+Your verification code is: A7K9Q2
+
+Line breaks should be preserved:
+    - indented line 1
+    - indented line 2
+
+Long line: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+Thanks,
+The GitHub Team</div>
+    <p class="note">Gmail tetap mengirim versi HTML. Untuk benar-benar tanpa HTML: di jendela Compose klik ⋮ (More options) → <b>Plain text mode</b> sebelum paste.</p>
+  </section>
+
+  <section>
+    <h2>3. Newsletter, tanpa OTP, dengan lampiran</h2>
+    <p class="tests">Menguji: angka biasa (tahun, harga, telepon, nomor order) <b>tidak</b> muncul sebagai OTP, tabel, gambar, lampiran dilewati tanpa error.</p>
+    <div class="row"><span class="label">Subject</span><span class="subject">Flash Sale 10.10 - diskon sampai 90% hanya tahun 2026</span><button data-copy="subject">Copy subject</button></div>
+    <div class="row"><span class="label">Body</span><button data-copy="body">Copy body</button></div>
+    <div class="body">
+      <h1 style="color:#ee4d2d;margin-top:0">Flash Sale 10.10 🔥</h1>
+      <p>Tahun 2026, harga Rp 150.000, telepon 0812 3456 7890, order #20261010.</p>
+      <table border="1" cellpadding="8" style="border-collapse:collapse">
+        <tr><th>Produk</th><th>Harga</th><th>Diskon</th></tr>
+        <tr><td>Sepatu</td><td>Rp 350.000</td><td>50%</td></tr>
+        <tr><td>Tas</td><td>Rp 150.000</td><td>90%</td></tr>
+      </table>
+      <p><img src="https://placehold.co/300x300/ee4d2d/ffffff/png?text=Promo" alt="Gambar produk" width="300" style="max-width:100%"></p>
+      <p><a href="https://example.com/sale">Belanja sekarang</a> | <a href="https://example.com/unsubscribe">Berhenti berlangganan</a></p>
+    </div>
+    <p class="note">Lampirkan file PDF atau gambar apa saja di Gmail (ikon 📎) untuk menguji lampiran.</p>
+  </section>
+
+  <section>
+    <h2>4. OTP dengan tanda hubung + aksen</h2>
+    <p class="tests">Menguji: format OTP "735-208" jadi 735208, karakter beraksen (é è à ç ü ñ).</p>
+    <div class="row"><span class="label">Subject</span><span class="subject">Votre code de sécurité</span><button data-copy="subject">Copy subject</button></div>
+    <div class="row"><span class="label">Body</span><button data-copy="body">Copy body</button></div>
+    <div class="body">
+      <p>Bonjour,</p>
+      <p>Votre security code est <b>735-208</b>.</p>
+      <p>Caractères accentués : é è à ç ü ñ</p>
+      <p>Merci.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>5. Tanpa subject, tanpa isi</h2>
+    <p class="tests">Menguji: "(No subject)" dan "This message has no readable content". Gmail akan bertanya "Send without subject?" → OK.</p>
+    <p class="note">Kosongkan Subject dan isi email, lalu Send.</p>
+  </section>
+</main>
+<script>
+  for (const button of document.querySelectorAll('button[data-copy]')) {
+    button.addEventListener('click', async () => {
+      const section = button.closest('section')
+      const original = button.textContent
+      try {
+        if (button.dataset.copy === 'subject') {
+          await navigator.clipboard.writeText(section.querySelector('.subject').textContent.trim())
+        } else {
+          const body = section.querySelector('.body')
+          // Copy as rich HTML so Gmail keeps formatting, with a plain-text fallback
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/html': new Blob([body.innerHTML], { type: 'text/html' }),
+              'text/plain': new Blob([body.innerText], { type: 'text/plain' }),
+            }),
+          ])
+        }
+        button.textContent = 'Copied ✓'
+        button.classList.add('done')
+      } catch {
+        button.textContent = 'Select & Cmd+C manually'
+      }
+      setTimeout(() => { button.textContent = original; button.classList.remove('done') }, 1800)
+    })
+  }
+</script>
+</body>
+</html>

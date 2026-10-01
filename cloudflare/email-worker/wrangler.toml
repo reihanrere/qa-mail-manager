@@ -1,0 +1,29 @@
+name = "qa-mail-ingest"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+# Email-only Worker: triggered by Email Routing and cron, never by HTTP, so no workers.dev URL
+workers_dev = false
+preview_urls = false
+
+[vars]
+# Public hostname of the Cloudflare tunnel that points at the backend's INGEST_PORT
+INGEST_URL = "https://mail-ingest.re-testing.me/api/ingest"
+# Optional: a verified Email Routing destination that also gets a copy of every message
+FORWARD_TO = ""
+# How long a message waits in the queue for the backend to come back (seconds, default 7 days)
+PENDING_TTL_SECONDS = "604800"
+# Queued messages re-delivered per cron run
+RETRY_BATCH_SIZE = "50"
+
+# INGEST_SECRET is a secret, never put it here:
+#   npx wrangler secret put INGEST_SECRET
+
+# Queue for messages that arrive while the backend is offline.
+# Created with: npx wrangler kv namespace create PENDING
+[[kv_namespaces]]
+binding = "PENDING"
+id = "6bed8d1073c54acaadfe7412745056c9"
+
+# Re-deliver queued messages every 5 minutes
+[triggers]
+crons = ["*/5 * * * *"]

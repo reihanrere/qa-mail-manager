@@ -40,6 +40,8 @@ func (e *APIError) Error() string {
 type requestOptions struct {
 	accept      string
 	contentType string
+	// raw receives the undecoded response body (downloads)
+	raw *[]byte
 }
 
 // do executes an HTTP request against the Mail.tm API and decodes the JSON result.
@@ -92,6 +94,10 @@ func (c *Client) doWith(ctx context.Context, method, path string, token string, 
 		return &APIError{StatusCode: resp.StatusCode, Message: errResp.message()}
 	}
 
+	if opts.raw != nil {
+		*opts.raw = respBody
+		return nil
+	}
 	if out == nil || len(respBody) == 0 {
 		return nil
 	}
@@ -153,6 +159,14 @@ func (c *Client) MarkMessageSeen(ctx context.Context, token, messageID string) e
 	body := markSeenRequest{Seen: true}
 	return c.doWith(ctx, http.MethodPatch, "/messages/"+messageID, token, body, nil,
 		requestOptions{contentType: "application/merge-patch+json"})
+}
+
+// Download fetches a binary resource such as an attachment's downloadUrl or a
+// message's raw source (/messages/{id}/download).
+func (c *Client) Download(ctx context.Context, token, path string) ([]byte, error) {
+	var body []byte
+	err := c.doWith(ctx, http.MethodGet, path, token, nil, nil, requestOptions{accept: "*/*", raw: &body})
+	return body, err
 }
 
 // GetMessageDetail retrieves the full body of a single message.

@@ -9,7 +9,7 @@ import (
 	"qa-mail-manager/internal/utils"
 )
 
-// AccountHandler exposes HTTP handlers for Mail.tm account management.
+// AccountHandler exposes HTTP handlers for mailbox account management.
 type AccountHandler struct {
 	service *services.AccountService
 }
@@ -21,8 +21,9 @@ func NewAccountHandler(service *services.AccountService) *AccountHandler {
 
 // generateRequest is the optional body for POST /api/accounts/generate.
 type generateRequest struct {
-	Tag  string `json:"tag"`
-	Note string `json:"note"`
+	Tag      string `json:"tag"`
+	Note     string `json:"note"`
+	Provider string `json:"provider"`
 }
 
 // updateAccountRequest is the body for PATCH /api/accounts/:id; omitted fields are unchanged.
@@ -46,7 +47,7 @@ func (h *AccountHandler) Generate(c fiber.Ctx) error {
 		}
 	}
 
-	input := services.GenerateAccountInput{Tag: body.Tag, Note: body.Note}
+	input := services.GenerateAccountInput{Tag: body.Tag, Note: body.Note, Provider: body.Provider}
 	account, err := h.service.GenerateAccount(c.Context(), input)
 	if err != nil {
 		return respondError(c, err, http.StatusBadGateway)
@@ -54,14 +55,52 @@ func (h *AccountHandler) Generate(c fiber.Ctx) error {
 	return utils.Success(c, http.StatusCreated, "Success", account)
 }
 
+// Settings handles GET /api/settings: providers with their domains, label limits,
+// inbox options and the editable settings with their environment defaults.
+func (h *AccountHandler) Settings(c fiber.Ctx) error {
+	settings, err := h.service.AppSettings(c.Context())
+	if err != nil {
+		return respondError(c, err, http.StatusInternalServerError)
+	}
+	return utils.Success(c, http.StatusOK, "Success", settings)
+}
+
+// UpdateSettings handles PATCH /api/settings with {"values": {...}, "reset": [...]}.
+func (h *AccountHandler) UpdateSettings(c fiber.Ctx) error {
+	var patch services.SettingsPatch
+	if err := c.Bind().Body(&patch); err != nil {
+		return utils.Error(c, http.StatusBadRequest, "invalid request body", nil)
+	}
+	if err := h.service.UpdateSettings(c.Context(), patch); err != nil {
+		return respondError(c, err, http.StatusInternalServerError)
+	}
+	return h.Settings(c)
+}
+
+// Replace handles POST /api/accounts/:id/replace: a new address with the same labels,
+// the old account is marked BLOCKED.
+func (h *AccountHandler) Replace(c fiber.Ctx) error {
+	id, err := parseAccountID(c)
+	if err != nil {
+		return respondError(c, err, http.StatusBadRequest)
+	}
+	result, err := h.service.ReplaceAccount(c.Context(), id)
+	if err != nil {
+		return respondError(c, err, http.StatusBadGateway)
+	}
+	return utils.Success(c, http.StatusCreated, "Success", result)
+}
+
 // List handles GET /api/accounts?search=&status=&sort=&page=&limit=.
 func (h *AccountHandler) List(c fiber.Ctx) error {
 	params := services.ListAccountsParams{
-		Search: c.Query("search"),
-		Status: c.Query("status"),
-		Sort:   c.Query("sort"),
-		Page:   fiber.Query[int](c, "page", 1),
-		Limit:  fiber.Query[int](c, "limit", 0),
+		Search:   c.Query("search"),
+		Status:   c.Query("status"),
+		Provider: c.Query("provider"),
+		Legacy:   fiber.Query[bool](c, "legacy", false),
+		Sort:     c.Query("sort"),
+		Page:     fiber.Query[int](c, "page", 1),
+		Limit:    fiber.Query[int](c, "limit", 0),
 	}
 
 	accounts, meta, err := h.service.ListAccounts(c.Context(), params)

@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2, Plus, RefreshCw, Search, Users } from 'lucide-react'
+import { Loader2, Plus, RefreshCcw, RefreshCw, Search, Users } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useProviderLabel } from '../provider'
+import type { MailProviderName } from '@/types/settings'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -19,6 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { EmptyState } from '@/components/common/empty-state'
 import { cn } from '@/lib/utils'
+import { apiErrorMessage } from '@/lib/api-error'
 import { accountApi } from '../api'
 import { useAccountStats, useInfiniteAccounts } from '../queries'
 import { EditAccountDialog, GenerateAccountDialog } from './account-dialogs'
@@ -30,6 +34,7 @@ import { ACCOUNT_STATUSES, ACCOUNT_STATUS_META, type AccountStatus } from '../st
 import type { MailAccount } from '@/types/account'
 
 type StatusFilter = 'ALL' | AccountStatus
+type ProviderFilter = 'ALL' | MailProviderName
 
 const PAGE_SIZE = 25
 
@@ -41,6 +46,10 @@ export function AccountsList() {
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
+  const [providerFilter, setProviderFilter] = useState<ProviderFilter>('ALL')
+  const [legacyOnly, setLegacyOnly] = useState(false)
+  const [pendingReplace, setPendingReplace] = useState<MailAccount | null>(null)
+  const providerLabel = useProviderLabel()
   const [pendingDelete, setPendingDelete] = useState<MailAccount | null>(null)
   const [editing, setEditing] = useState<MailAccount | null>(null)
 
@@ -62,6 +71,8 @@ export function AccountsList() {
     limit: PAGE_SIZE,
     search: search || undefined,
     status: statusFilter === 'ALL' ? undefined : statusFilter,
+    provider: providerFilter === 'ALL' ? undefined : providerFilter,
+    legacy: legacyOnly || undefined,
   })
 
   const statusMutation = useMutation({
@@ -84,6 +95,18 @@ export function AccountsList() {
     onError: () => toast.error('Failed to delete account'),
   })
 
+  const replaceMutation = useMutation({
+    mutationFn: (id: string) => accountApi.replace(id),
+    onSuccess: (result) => {
+      toast.success(`Replaced with ${result.account.email}`, {
+        description: 'The old address is now Blocked; its inbox stays readable.',
+      })
+      setPendingReplace(null)
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    },
+    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to replace account')),
+  })
+
   const counts = useMemo(() => {
     const result = { ALL: statsQuery.data?.total ?? 0 } as Record<StatusFilter, number>
     for (const status of ACCOUNT_STATUSES) {
@@ -103,6 +126,7 @@ export function AccountsList() {
     onChangeStatus: (status: AccountStatus) => statusMutation.mutate({ id: account.id, status }),
     onDelete: () => setPendingDelete(account),
     onEdit: () => setEditing(account),
+    onReplace: () => setPendingReplace(account),
   })
 
   return (
@@ -113,7 +137,7 @@ export function AccountsList() {
           <p className="text-muted-foreground">
             {statsQuery.isPending
               ? 'Loading accounts…'
-              : `${counts.ALL} test account${counts.ALL === 1 ? '' : 's'} on Mail.tm`}
+              : `${counts.ALL} test account${counts.ALL === 1 ? '' : 's'}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -148,6 +172,38 @@ export function AccountsList() {
             />
             {isFiltering && (
               <Loader2 className="absolute top-1/2 right-2.5 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={providerFilter}
+              onValueChange={(value) => setProviderFilter(value as ProviderFilter)}
+            >
+              <SelectTrigger size="sm" className="w-44" aria-label="Filter by provider">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All providers</SelectItem>
+                {(statsQuery.data?.byProvider ?? []).map(({ provider, count }) => (
+                  <SelectItem key={provider} value={provider}>
+                    {providerLabel(provider)}
+                    <span className="text-muted-foreground tabular-nums">{count}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(legacyOnly || (statsQuery.data?.legacy ?? 0) > 0) && (
+              <Button
+                variant={legacyOnly ? 'secondary' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                aria-pressed={legacyOnly}
+                onClick={() => setLegacyOnly((value) => !value)}
+              >
+                <span className="size-1.5 rounded-full bg-amber-500" />
+                Old format
+                <span className="text-muted-foreground tabular-nums">{statsQuery.data?.legacy ?? 0}</span>
+              </Button>
             )}
           </div>
           <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:ml-auto md:px-0">
@@ -197,7 +253,7 @@ export function AccountsList() {
             description={
               counts.ALL === 0
                 ? 'Generate your first test account to get started'
-                : 'Try adjusting your search or status filter'
+                : 'Try adjusting your search or filters'
             }
             className="m-4"
           />
@@ -276,6 +332,37 @@ export function AccountsList() {
       <EditAccountDialog account={editing} onOpenChange={(open) => !open && setEditing(null)} />
 
       <AlertDialog
+        open={!!pendingReplace}
+        onOpenChange={(open) => !open && !replaceMutation.isPending && setPendingReplace(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Replace this address?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A new realistic address is generated on the same provider with the same tag and note.{' '}
+              <span className="font-mono break-all text-foreground">{pendingReplace?.email}</span> is marked
+              Blocked so it is not used again; its inbox stays readable.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={replaceMutation.isPending}>Cancel</AlertDialogCancel>
+            <Button
+              disabled={replaceMutation.isPending}
+              onClick={() => pendingReplace && replaceMutation.mutate(pendingReplace.id)}
+              className="gap-2"
+            >
+              {replaceMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="size-4" />
+              )}
+              Replace
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
         open={!!pendingDelete}
         onOpenChange={(open) => !open && !deleteMutation.isPending && setPendingDelete(null)}
       >
@@ -284,8 +371,10 @@ export function AccountsList() {
             <AlertDialogTitle>Delete this account?</AlertDialogTitle>
             <AlertDialogDescription>
               <span className="font-mono break-all text-foreground">{pendingDelete?.email}</span> will be
-              removed from QA Mail Manager. The mailbox on Mail.tm is not deleted, but you will no longer be
-              able to read its inbox here.
+              removed from QA Mail Manager.{' '}
+              {pendingDelete?.provider === 'local'
+                ? 'Its stored messages are deleted too, and new mail to this address will be rejected.'
+                : 'The mailbox on Mail.tm is not deleted, but you will no longer be able to read its inbox here.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
