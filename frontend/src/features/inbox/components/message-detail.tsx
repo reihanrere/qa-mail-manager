@@ -6,6 +6,7 @@ import {
   FileCode,
   Loader2,
   Mail,
+  Maximize2,
   Paperclip,
   RefreshCw,
   Reply,
@@ -30,6 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/common/empty-state'
 import { cn } from '@/lib/utils'
 import { inboxApi } from '@/features/inbox/api'
@@ -78,6 +80,8 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
   // Only own-domain accounts can send; Mail.tm's domain is not ours to send from
   const canSend = !!settings?.inbox.sendingEnabled && account?.provider === 'local'
   const attemptedIds = useRef(new Set<string>())
+  // Keyed by message id so switching messages closes the expanded view
+  const [expandedId, setExpandedId] = useState<string>()
 
   // Opening a message does not mark it read on Mail.tm, so do it explicitly (once per message)
   useEffect(() => {
@@ -111,6 +115,19 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
         </Tooltip>
         {accountId && message && message.id === messageId && (
           <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setExpandedId(message.id)}
+                  aria-label="Expand message"
+                >
+                  <Maximize2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Expand message</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" asChild>
@@ -191,9 +208,44 @@ export function MessageDetail({ accountId, messageId, onBack, onDeleted }: Messa
           />
         </div>
       ) : (
-        <MessageContent accountId={accountId!} message={message} />
+        <>
+          <MessageContent accountId={accountId!} message={message} />
+          <ExpandedMessageDialog
+            accountId={accountId!}
+            message={message}
+            open={expandedId === message.id}
+            onOpenChange={(open) => setExpandedId(open ? message.id : undefined)}
+          />
+        </>
       )}
     </div>
+  )
+}
+
+/** Near full-screen view of the same message, for emails designed wider than the detail pane. */
+function ExpandedMessageDialog({
+  accountId,
+  message,
+  open,
+  onOpenChange,
+}: {
+  accountId: string
+  message: MessageData
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="@container flex h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
+        <div className="flex h-[52px] shrink-0 items-center border-b pr-12 pl-4">
+          <DialogTitle className="truncate text-sm" title={message.subject}>
+            {message.subject || '(No subject)'}
+          </DialogTitle>
+          <DialogDescription className="sr-only">Full view of the selected message</DialogDescription>
+        </div>
+        <MessageContent accountId={accountId} message={message} />
+      </DialogContent>
+    </Dialog>
   )
 }
 

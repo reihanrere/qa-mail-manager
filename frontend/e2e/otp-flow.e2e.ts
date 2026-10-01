@@ -66,7 +66,16 @@ test('generate an account, receive an OTP email live, copy the code', async ({ p
     'href',
     'https://example.com/verify?token=e2eTokenAbcdefgh123',
   )
-  await page.getByRole('button', { name: 'Copy', exact: true }).click()
+  await page.getByRole('button', { name: 'Copy OTP to clipboard' }).click()
   await expect(page.getByText('OTP copied to clipboard')).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('735209')
+
+  // Expanded view shows the same message in a wide modal
+  await page.getByRole('button', { name: 'Expand message' }).click()
+  const expanded = page.getByRole('dialog', { name: 'Kode verifikasi E2E' })
+  await expect(expanded.locator('[data-otp-code]')).toHaveText('735209')
+  await expect(expanded.getByTitle('Message content')).toBeVisible()
+  expect((await expanded.boundingBox())!.width).toBeGreaterThan(900)
+  await page.keyboard.press('Escape')
+  await expect(expanded).toBeHidden()
 })
